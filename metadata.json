@@ -1,0 +1,6 @@
+{
+  "name": "ARTVERSE AI — Dạy học Mĩ thuật",
+  "description": "Hệ sinh thái thông minh hỗ trợ giáo viên Mĩ thuật tiểu học và THCS Việt Nam thiết kế bài học, đánh giá sản phẩm theo GDPT 2018, quản lý hồ sơ và báo cáo tiến bộ.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

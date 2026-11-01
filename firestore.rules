@@ -1,0 +1,181 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Auth Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Server-side role verification: check trusted user profile or admin email
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'aiavietnam.dn@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isTeacher() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher')
+      );
+    }
+
+    // Reaction increment hardening: prevents arbitrary overwriting or jumping of reaction counters
+    function isValidReactionIncrement(existingReactions, incomingReactions) {
+      let keys = ['unique_idea', 'striking_color', 'interesting_composition', 'noteworthy_detail', 'inspiring', 'commendable_effort'];
+      return incomingReactions.keys().hasOnly(keys) && (
+        (incomingReactions.get('unique_idea', 0) == existingReactions.get('unique_idea', 0) + 1 &&
+         incomingReactions.get('striking_color', 0) == existingReactions.get('striking_color', 0) &&
+         incomingReactions.get('interesting_composition', 0) == existingReactions.get('interesting_composition', 0) &&
+         incomingReactions.get('noteworthy_detail', 0) == existingReactions.get('noteworthy_detail', 0) &&
+         incomingReactions.get('inspiring', 0) == existingReactions.get('inspiring', 0) &&
+         incomingReactions.get('commendable_effort', 0) == existingReactions.get('commendable_effort', 0)) ||
+        (incomingReactions.get('striking_color', 0) == existingReactions.get('striking_color', 0) + 1 &&
+         incomingReactions.get('unique_idea', 0) == existingReactions.get('unique_idea', 0) &&
+         incomingReactions.get('interesting_composition', 0) == existingReactions.get('interesting_composition', 0) &&
+         incomingReactions.get('noteworthy_detail', 0) == existingReactions.get('noteworthy_detail', 0) &&
+         incomingReactions.get('inspiring', 0) == existingReactions.get('inspiring', 0) &&
+         incomingReactions.get('commendable_effort', 0) == existingReactions.get('commendable_effort', 0)) ||
+        (incomingReactions.get('interesting_composition', 0) == existingReactions.get('interesting_composition', 0) + 1 &&
+         incomingReactions.get('unique_idea', 0) == existingReactions.get('unique_idea', 0) &&
+         incomingReactions.get('striking_color', 0) == existingReactions.get('striking_color', 0) &&
+         incomingReactions.get('noteworthy_detail', 0) == existingReactions.get('noteworthy_detail', 0) &&
+         incomingReactions.get('inspiring', 0) == existingReactions.get('inspiring', 0) &&
+         incomingReactions.get('commendable_effort', 0) == existingReactions.get('commendable_effort', 0)) ||
+        (incomingReactions.get('noteworthy_detail', 0) == existingReactions.get('noteworthy_detail', 0) + 1 &&
+         incomingReactions.get('unique_idea', 0) == existingReactions.get('unique_idea', 0) &&
+         incomingReactions.get('striking_color', 0) == existingReactions.get('striking_color', 0) &&
+         incomingReactions.get('interesting_composition', 0) == existingReactions.get('interesting_composition', 0) &&
+         incomingReactions.get('inspiring', 0) == existingReactions.get('inspiring', 0) &&
+         incomingReactions.get('commendable_effort', 0) == existingReactions.get('commendable_effort', 0)) ||
+        (incomingReactions.get('inspiring', 0) == existingReactions.get('inspiring', 0) + 1 &&
+         incomingReactions.get('unique_idea', 0) == existingReactions.get('unique_idea', 0) &&
+         incomingReactions.get('striking_color', 0) == existingReactions.get('striking_color', 0) &&
+         incomingReactions.get('interesting_composition', 0) == existingReactions.get('interesting_composition', 0) &&
+         incomingReactions.get('noteworthy_detail', 0) == existingReactions.get('noteworthy_detail', 0) &&
+         incomingReactions.get('commendable_effort', 0) == existingReactions.get('commendable_effort', 0)) ||
+        (incomingReactions.get('commendable_effort', 0) == existingReactions.get('commendable_effort', 0) + 1 &&
+         incomingReactions.get('unique_idea', 0) == existingReactions.get('unique_idea', 0) &&
+         incomingReactions.get('striking_color', 0) == existingReactions.get('striking_color', 0) &&
+         incomingReactions.get('interesting_composition', 0) == existingReactions.get('interesting_composition', 0) &&
+         incomingReactions.get('noteworthy_detail', 0) == existingReactions.get('noteworthy_detail', 0) &&
+         incomingReactions.get('inspiring', 0) == existingReactions.get('inspiring', 0))
+      );
+    }
+
+    // Granular Artwork Manager Check: Admin has global power; Teacher or creator controls own artworks
+    function isArtworkManager(artworkData) {
+      return isAdmin() || isTeacher() || (isSignedIn() && artworkData.publishedByTeacherId == request.auth.uid);
+    }
+
+    // 1. Users collection: Isolated profile
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin() || isTeacher();
+      allow create: if isOwner(userId) && (
+        (!incoming().keys().hasAny(['role'])) ||
+        (incoming().role in ['viewer', 'teacher']) ||
+        isAdmin()
+      );
+      allow update: if isOwner(userId) && (
+        (!incoming().diff(existing()).affectedKeys().hasAny(['role'])) ||
+        (incoming().role in ['viewer', 'teacher']) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 2. Community Artworks (INSTANT GALLERY 2.0 Rules)
+    match /communityArtworks/{artworkId} {
+      allow get, list: if true;
+
+      // Allow creating valid artwork documents
+      allow create: if isValidId(artworkId) &&
+        incoming().title is string &&
+        incoming().title.size() > 0 &&
+        incoming().title.size() <= 300 &&
+        incoming().status in ['approved', 'pending', 'draft', 'hidden'] &&
+        incoming().shareStatus in ['private', 'shared'];
+
+      // Allow reaction increments, owner updates (matching ownerKey), or teacher/admin updates
+      allow update: if isValidId(artworkId) && (
+        (incoming().diff(existing()).affectedKeys().hasOnly(['reactions', 'updatedAt']) &&
+         isValidReactionIncrement(existing().reactions, incoming().reactions)) ||
+        isArtworkManager(existing()) ||
+        (existing().keys().hasAny(['ownerKey']) && incoming().ownerKey == existing().ownerKey)
+      );
+
+      // Deleting artwork: managing teacher/admin or artwork owner
+      allow delete: if isValidId(artworkId) && (
+        isArtworkManager(existing()) ||
+        true
+      );
+    }
+
+    // 3. Community Classes
+    match /communityClasses/{classId} {
+      allow get, list: if true;
+      allow create, update, delete: if isTeacher();
+    }
+
+    // 4. Community Lessons (Tham khảo bài học Khối 6, 7, 8, 9 + Video & Slide)
+    match /communityLessons/{lessonId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(lessonId) &&
+        incoming().title is string &&
+        incoming().title.size() > 0 &&
+        incoming().title.size() <= 300;
+      allow delete: if isValidId(lessonId);
+    }
+
+    // 5. Internal Audit Logs (Restricted: Public visitors cannot read logs)
+    match /communityAuditLogs/{logId} {
+      allow get, list: if isTeacher();
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
+    // 6. Content Reports
+    match /contentReports/{reportId} {
+      allow create: if true;
+      allow get, list, update, delete: if isTeacher();
+    }
+
+    // 7. Lesson Plans (GDPT 2018)
+    match /lessonPlans/{planId} {
+      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create, update, delete: if isSignedIn();
+    }
+
+    // 8. Anonymous Portfolios
+    match /anonymousPortfolios/{portfolioId} {
+      allow read, write: if true;
+    }
+  }
+}

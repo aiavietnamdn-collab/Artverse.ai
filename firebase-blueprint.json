@@ -1,0 +1,241 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Art teacher user profile and permissions",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "photoURL": { "type": "string", "maxLength": 1024 },
+        "role": { "type": "string", "enum": ["teacher", "admin"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "CommunityArtwork": {
+      "title": "CommunityArtwork",
+      "description": "Student artwork exhibited without student names, emails or rosters",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerKey": { "type": "string", "maxLength": 128 },
+        "creatorAnonymousPseudonym": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 2048 },
+        "materialsUsed": { "type": "string", "maxLength": 256 },
+        "processNotes": { "type": "string", "maxLength": 2048 },
+        "classGroupId": { "type": "string", "maxLength": 64 },
+        "className": { "type": "string", "maxLength": 128 },
+        "lessonId": { "type": "string", "maxLength": 64 },
+        "lessonTitle": { "type": "string", "maxLength": 256 },
+        "imageUrl": { "type": "string", "maxLength": 4096 },
+        "status": { "type": "string", "enum": ["draft", "pending", "approved", "rejected", "hidden", "removed"] },
+        "shareStatus": { "type": "string", "enum": ["private", "shared"] },
+        "shareToken": { "type": "string", "maxLength": 128 },
+        "publishedByTeacherId": { "type": "string", "maxLength": 128 },
+        "storageLocation": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerKey", "title", "classGroupId", "lessonId", "status", "shareStatus"]
+    },
+    "CommunityClass": {
+      "title": "CommunityClass",
+      "description": "School class exhibition room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 1024 },
+        "isPublicGalleryEnabled": { "type": "boolean" },
+        "isHidden": { "type": "boolean" },
+        "artworksCount": { "type": "number" }
+      },
+      "required": ["id", "name", "isPublicGalleryEnabled", "isHidden"]
+    },
+    "CommunityLesson": {
+      "title": "CommunityLesson",
+      "description": "Art lesson reference for grades 6, 7, 8, 9 with video and slide slots",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "classGroupId": { "type": "string", "maxLength": 64 },
+        "className": { "type": "string", "maxLength": 64 },
+        "grade": { "type": "string", "enum": ["6", "7", "8", "9"] },
+        "title": { "type": "string", "maxLength": 256 },
+        "topic": { "type": "string", "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 2048 },
+        "isHidden": { "type": "boolean" },
+        "videoUrl": { "type": "string", "maxLength": 500000 },
+        "videoFileName": { "type": "string", "maxLength": 256 },
+        "videoFileSize": { "type": "number" },
+        "videoMimeType": { "type": "string", "maxLength": 128 },
+        "videoUpdatedAt": { "type": "string", "maxLength": 64 },
+        "slideUrl": { "type": "string", "maxLength": 500000 },
+        "slideFileName": { "type": "string", "maxLength": 256 },
+        "slideFileSize": { "type": "number" },
+        "slideMimeType": { "type": "string", "maxLength": 128 },
+        "slideUpdatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "classGroupId", "title"]
+    },
+    "CommunityAuditLog": {
+      "title": "CommunityAuditLog",
+      "description": "Audit record for photo upload, security checks, and moderation actions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 64 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "targetTitle": { "type": "string", "maxLength": 256 },
+        "performedBy": { "type": "string", "maxLength": 128 },
+        "performedByRole": { "type": "string", "maxLength": 64 },
+        "timestamp": { "type": "string", "maxLength": 64 },
+        "details": { "type": "string", "maxLength": 2048 },
+        "isSafeOperation": { "type": "boolean" }
+      },
+      "required": ["id", "action", "targetId", "performedBy", "performedByRole", "timestamp"]
+    },
+    "ContentReport": {
+      "title": "ContentReport",
+      "description": "Community user report for inappropriate photo or comment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "targetType": { "type": "string", "enum": ["artwork", "comment"] },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "targetTitle": { "type": "string", "maxLength": 256 },
+        "reasonCategory": { "type": "string", "maxLength": 64 },
+        "reasonLabel": { "type": "string", "maxLength": 256 },
+        "details": { "type": "string", "maxLength": 2048 },
+        "status": { "type": "string", "enum": ["open", "reviewing", "resolved"] },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "targetType", "targetId", "reasonCategory", "status", "createdAt"]
+    },
+    "LessonPlan": {
+      "title": "LessonPlan",
+      "description": "Art lesson plan authored by an art teacher for GDPT 2018",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "grade": { "type": "string", "maxLength": 32 },
+        "level": { "type": "string", "enum": ["primary", "secondary"] },
+        "textbook": { "type": "string", "maxLength": 128 },
+        "topic": { "type": "string", "maxLength": 256 },
+        "durationPeriods": { "type": "number" },
+        "learningObjectives": { "type": "string", "maxLength": 2048 },
+        "materialsAndEquipment": { "type": "string", "maxLength": 2048 },
+        "studentAudienceAndNotes": { "type": "string", "maxLength": 2048 },
+        "status": { "type": "string", "enum": ["draft", "approved"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "title", "grade", "level", "topic", "status"]
+    },
+    "Rubric": {
+      "title": "Rubric",
+      "description": "Art assessment rubric with 4 achievement levels and criteria",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "grade": { "type": "string", "maxLength": 32 },
+        "topic": { "type": "string", "maxLength": 256 },
+        "productType": { "type": "string", "maxLength": 128 },
+        "evaluationMode": { "type": "string", "enum": ["weighted", "qualitative"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "title", "grade", "topic", "productType", "evaluationMode"]
+    },
+    "AnonymousSession": {
+      "title": "AnonymousSession",
+      "description": "Teacher-created assignment session with high-entropy unguessable join token",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "teacherId": { "type": "string", "maxLength": 128 },
+        "teacherName": { "type": "string", "maxLength": 128 },
+        "lessonTitle": { "type": "string", "maxLength": 256 },
+        "grade": { "type": "string", "maxLength": 32 },
+        "topic": { "type": "string", "maxLength": 256 },
+        "sessionToken": { "type": "string", "maxLength": 128 },
+        "isRevoked": { "type": "boolean" },
+        "allowSubmissions": { "type": "boolean" },
+        "instructions": { "type": "string", "maxLength": 2048 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "teacherId", "lessonTitle", "sessionToken", "isRevoked"]
+    },
+    "AnonymousPortfolio": {
+      "title": "AnonymousPortfolio",
+      "description": "Purely anonymous student portfolio without school roster, real name, email, or DOB",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "sessionId": { "type": "string", "maxLength": 128 },
+        "sessionToken": { "type": "string", "maxLength": 128 },
+        "teacherId": { "type": "string", "maxLength": 128 },
+        "portfolioSecretKey": { "type": "string", "maxLength": 128 },
+        "anonymousCode": { "type": "string", "maxLength": 64, "pattern": "^ART-[A-Z0-9]{4}-[A-Z0-9]{4}$" },
+        "lessonTitle": { "type": "string", "maxLength": 256 },
+        "topic": { "type": "string", "maxLength": 256 },
+        "grade": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["draft", "submitted", "evaluated"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "sessionId", "teacherId", "portfolioSecretKey", "anonymousCode", "lessonTitle", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Teacher profile and security role metadata"
+    },
+    "/communityArtworks/{artworkId}": {
+      "schema": "CommunityArtwork",
+      "description": "Community artworks exhibited in public gallery"
+    },
+    "/communityClasses/{classId}": {
+      "schema": "CommunityClass",
+      "description": "Classroom exhibition spaces"
+    },
+    "/communityLessons/{lessonId}": {
+      "schema": "CommunityLesson",
+      "description": "Art topics and lesson definitions"
+    },
+    "/communityAuditLogs/{logId}": {
+      "schema": "CommunityAuditLog",
+      "description": "Internal security and upload audit logs"
+    },
+    "/contentReports/{reportId}": {
+      "schema": "ContentReport",
+      "description": "Violation and inappropriate content reports"
+    },
+    "/lessonPlans/{planId}": {
+      "schema": "LessonPlan",
+      "description": "Art lesson plans created and isolated per teacher"
+    },
+    "/rubrics/{rubricId}": {
+      "schema": "Rubric",
+      "description": "4-level assessment rubrics isolated per teacher"
+    },
+    "/anonymousSessions/{sessionId}": {
+      "schema": "AnonymousSession",
+      "description": "Anonymous assignment sessions with unguessable tokens"
+    },
+    "/anonymousPortfolios/{portfolioId}": {
+      "schema": "AnonymousPortfolio",
+      "description": "Unguessable anonymous student portfolios without roster data"
+    }
+  }
+}

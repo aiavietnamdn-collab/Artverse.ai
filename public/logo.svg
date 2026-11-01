@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="50%" stop-color="#1E1B4B" />
+      <stop offset="100%" stop-color="#1E293B" />
+    </linearGradient>
+
+    <!-- Outer Frame Gold/Platinum Gradient -->
+    <linearGradient id="frameGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCD34D" />
+      <stop offset="35%" stop-color="#F59E0B" />
+      <stop offset="70%" stop-color="#D97706" />
+      <stop offset="100%" stop-color="#FDE68A" />
+    </linearGradient>
+
+    <!-- Inner Frame Glow -->
+    <linearGradient id="innerGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0.1" />
+    </linearGradient>
+
+    <!-- Vibrant Art Shapes Gradients -->
+    <!-- 1. Sun / Kinetic Golden Disc -->
+    <linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+
+    <!-- 2. Cobalt / Azure Prism -->
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#2563EB" />
+    </linearGradient>
+
+    <!-- 3. Coral / Vermilion Shard -->
+    <linearGradient id="coralGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FB7185" />
+      <stop offset="100%" stop-color="#E11D48" />
+    </linearGradient>
+
+    <!-- 4. Emerald Modernist Arch -->
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+
+    <!-- 5. Violet Nebula Sweep -->
+    <linearGradient id="violetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC" />
+      <stop offset="100%" stop-color="#7C3AED" />
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="shadowFilter" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+    <filter id="shapeShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#020617" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- 1. Rounded Square App Icon Base -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Subtle Museum Glass Reflection -->
+  <path d="M48 112 C 48 76.8, 76.8 48, 112 48 L 400 48 C 300 120, 150 220, 48 320 Z" fill="white" fill-opacity="0.04" />
+
+  <!-- 2. Stylized Modernist Picture Frame (Outer & Inner Bevel) -->
+  <g filter="url(#shadowFilter)">
+    <!-- Outer Picture Frame with Chamfered Modern Corners -->
+    <rect x="76" y="76" width="360" height="360" rx="36" fill="none" stroke="url(#frameGrad)" stroke-width="20" stroke-linejoin="round" />
+    
+    <!-- Canvas Matting / Inner Border -->
+    <rect x="100" y="100" width="312" height="312" rx="24" fill="#0B0F19" stroke="#334155" stroke-width="2" />
+    <rect x="100" y="100" width="312" height="312" rx="24" fill="url(#innerGlow)" />
+  </g>
+
+  <!-- 3. Colorful Abstract Modern Art Shapes Inside the Frame -->
+  <g filter="url(#shapeShadow)">
+    <!-- Emerald Geometric Arch (Left Base) -->
+    <path d="M124 380 L124 280 C124 235 160 200 205 200 C250 200 286 235 286 280 L286 380 Z" fill="url(#emeraldGrad)" fill-opacity="0.9" />
+
+    <!-- Cobalt / Azure Dynamic Wedge (Bottom Right) -->
+    <path d="M210 380 L388 380 L388 230 C388 230 320 280 210 380 Z" fill="url(#blueGrad)" />
+
+    <!-- Violet Diagonal Creative Flow (Midground) -->
+    <path d="M140 380 L370 150 L340 130 L120 340 Z" fill="url(#violetGrad)" fill-opacity="0.85" />
+
+    <!-- Golden Radiant Disc / Sun of Inspiration (Top Right) -->
+    <circle cx="316" cy="196" r="62" fill="url(#sunGrad)" />
+
+    <!-- Coral Vermilion Modernist Shard (Center Foreground) -->
+    <polygon points="170,290 270,160 300,310" fill="url(#coralGrad)" />
+
+    <!-- Pure White Central AI Spark / Star of Innovation -->
+    <path d="M256 220 Q256 256 220 256 Q256 256 256 292 Q256 256 292 256 Q256 256 256 220 Z" fill="#FFFFFF" />
+  </g>
+
+  <!-- 4. Museum Digital Accent Dots (Corner Precision Marks) -->
+  <circle cx="96" cy="96" r="5" fill="#FCD34D" />
+  <circle cx="416" cy="96" r="5" fill="#FCD34D" />
+  <circle cx="96" cy="416" r="5" fill="#FCD34D" />
+  <circle cx="416" cy="416" r="5" fill="#FCD34D" />
+</svg>

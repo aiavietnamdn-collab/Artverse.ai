@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --art-bg-paper: #FAF8F5;
+    --art-bg-warm: #F3EFEA;
+    --art-charcoal: #121316;
+    --art-cobalt: #1D4ED8;
+    --art-gold: #D97706;
+    --art-orange: #EA580C;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+
+  html, body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    background-color: #FAF8F5;
+    color: #121316;
+    overflow-x: hidden;
+    max-width: 100vw;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  /* Editorial Serif Utility */
+  .font-editorial {
+    font-family: 'Playfair Display', Georgia, Cambria, 'Times New Roman', Times, serif;
+  }
+
+  /* Prevent iOS Safari auto-zoom on input focus by ensuring >= 16px on mobile screens */
+  @media screen and (max-width: 768px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+  }
+}
+
+/* iOS Safe Area Utilities for Dynamic Island & Home Indicator */
+.pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+}
+
+.pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+.pb-safe-nav {
+  padding-bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Hide scrollbars cleanly on horizontal filter rails */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Print styling for lesson plans and progress reports */
+@media print {
+  aside, header, nav, .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  .printable-area {
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
+  }
+}

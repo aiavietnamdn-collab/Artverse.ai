@@ -1,0 +1,103 @@
+import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+import firebaseConfig from '../../firebase-applet-config.json';
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+// Initialize Firestore with the specific database ID (CRITICAL)
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Initialize Auth
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
+
+// Initialize Cloud Storage
+export const storage = getStorage(app);
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function isOfflineOrTokenServiceError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    msg.includes('the client is offline') ||
+    msg.includes('client is offline') ||
+    msg.includes('token-service-api') ||
+    msg.includes('securetoken.googleapis.com') ||
+    msg.includes('Fetching auth token failed') ||
+    msg.includes('unavailable')
+  );
+}
+
+/**
+ * Standard Firestore Error Handler conforming to specification
+ */
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map((provider) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || [],
+    },
+    operationType,
+    path,
+  };
+  if (isOfflineOrTokenServiceError(error)) {
+    console.warn('Firestore đang ở chế độ ngoại tuyến hoặc đồng bộ cục bộ:', errInfo.path);
+  } else {
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+  }
+  throw new Error(JSON.stringify(errInfo));
+}
+
+/**
+ * Validates connection to Firestore at startup
+ */
+export async function testConnection(): Promise<boolean> {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    return true;
+  } catch (error) {
+    if (isOfflineOrTokenServiceError(error)) {
+      console.warn('Firebase client is offline or database initializing.');
+      return false;
+    }
+    // Permissions error on non-existent test doc is expected and indicates server responded
+    return true;
+  }
+}
+
+export { signInWithPopup, signOut };

@@ -1,0 +1,56 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'aiavietnam.dn@gmail.com';
+    }
+
+    function isTeacherOwner(teacherId) {
+      return isSignedIn() && (isAdmin() || request.auth.uid == teacherId);
+    }
+
+    function isImageFile() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp)') &&
+             request.resource.size < 12 * 1024 * 1024; // max 12MB
+    }
+
+    // 1. Public community artworks photos
+    // Anyone can read clean exhibition photos
+    // ONLY the owning teacher (or admin) can write, overwrite, or delete!
+    match /artworks/{teacherId}/{artworkId}/public/{fileName} {
+      allow read: if true;
+      allow write: if isTeacherOwner(teacherId) && isImageFile();
+      allow delete: if isTeacherOwner(teacherId);
+    }
+
+    // 2. Private / Pending / Quarantined photos
+    // ONLY the owning teacher or admin can read, write, or delete!
+    // Public visitors and other teachers CANNOT read or write here.
+    match /artworks/{teacherId}/{artworkId}/private/{fileName} {
+      allow read, delete: if isTeacherOwner(teacherId);
+      allow write: if isTeacherOwner(teacherId) && isImageFile();
+    }
+
+    // 3. Fallback for legacy paths
+    match /artworks/{artworkId}/{scope}/{fileName} {
+      allow read: if scope == 'public';
+      allow write, delete: if isAdmin();
+    }
+
+    // 4. Private user drafts
+    match /private_artworks/{userId}/{allPaths=**} {
+      allow read, write, delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Default deny catch-all
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
