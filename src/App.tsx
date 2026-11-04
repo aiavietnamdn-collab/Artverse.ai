@@ -13,6 +13,8 @@ import {
   ClassGroup, 
   ArtLesson, 
   ArtworkComment, 
+  ArtworkStory,
+  ArtworkStoryStatus,
   ContentReport, 
   AuditLogEntry,
   PositiveReactionKey,
@@ -40,6 +42,8 @@ import {
   subscribeCommunityLessons,
   subscribeCommunityAuditLogs,
   subscribeContentReports,
+  subscribeArtworkStories,
+  moderateArtworkStoryInFirestore,
   createCommunityArtworkInFirestore,
   updateCommunityArtworkInFirestore,
   hideCommunityArtworkInFirestore,
@@ -50,6 +54,7 @@ import {
   deleteCommunityClassInFirestore,
   saveCommunityLessonInFirestore,
   deleteCommunityLessonInFirestore,
+  getCommunityLessonsFromFirestore,
   createContentReportInFirestore,
   updateContentReportInFirestore,
   logCommunityAuditInFirestore,
@@ -58,7 +63,8 @@ import {
 import { 
   quarantineArtworkPhoto, 
   restoreArtworkPhotoToPublic, 
-  deleteArtworkPhotoFromStorage 
+  deleteArtworkPhotoFromStorage,
+  uploadArtworkPhotoToStorageWithProgress
 } from './services/communityStorageService';
 
 import { useAuth } from './context/AuthContext';
@@ -69,10 +75,12 @@ import { MobileBottomNav } from './components/common/MobileBottomNav';
 import { ToastContainer } from './components/common/ToastContainer';
 import { OfflineStatusBanner } from './components/common/OfflineStatusBanner';
 import { RbacRoleBar } from './components/community/RbacRoleBar';
-import { getInitialTabFromUrl, syncUrlWithTab } from './lib/platform';
+import { getInitialTabFromUrl, syncUrlWithTab, getApiUrl } from './lib/platform';
 
 import { DiscoverView } from './components/community/DiscoverView';
 import { CommunityLibraryView } from './components/community/CommunityLibraryView';
+import { ArtworkStoriesSection } from './components/community/ArtworkStoriesSection';
+import { StudentStoryModal } from './components/community/StudentStoryModal';
 import { ClassLessonManagerView } from './components/community/ClassLessonManagerView';
 import { ProfileManagementView } from './components/community/ProfileManagementView';
 import { ModerationQueueView } from './components/community/ModerationQueueView';
@@ -85,11 +93,27 @@ import { ReportViolationModal } from './components/community/ReportViolationModa
 import { ExhibitionLabelAndCertificateModal } from './components/community/ExhibitionLabelAndCertificateModal';
 import { ClassArtbookExportModal } from './components/community/ClassArtbookExportModal';
 import { GeminiArtChatbox } from './components/community/GeminiArtChatbox';
+import { StudentPinLoginModal } from './components/community/StudentPinLoginModal';
+import { StorageManagementCenterView } from './components/community/StorageManagementCenterView';
+import { ArtverseShortsView } from './components/community/ArtverseShortsView';
+import { UploadHubView } from './components/community/UploadHubView';
+import { ManagementAndAdminView } from './components/community/ManagementAndAdminView';
+import { GlobalSearchModal } from './components/common/GlobalSearchModal';
 
 import { RefreshCw, AlertCircle } from 'lucide-react';
 
 export default function App() {
-  const { user, profile, isTeacher, isAdmin, verifiedRole, loginWithGoogle } = useAuth();
+  const {
+    user,
+    profile,
+    isTeacher,
+    isAdmin,
+    verifiedRole,
+    loginWithGoogle,
+    getValidBearerToken,
+    isStudentLoginModalOpen,
+    setIsStudentLoginModalOpen,
+  } = useAuth();
 
   const [currentTab, setCurrentTab] = useState<ScreenTab>(() => getInitialTabFromUrl());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -116,6 +140,8 @@ export default function App() {
       setCurrentRole('admin');
     } else if (verifiedRole === 'teacher') {
       setCurrentRole('teacher');
+    } else if (verifiedRole === 'student') {
+      setCurrentRole('student');
     } else {
       setCurrentRole('viewer');
     }
@@ -142,6 +168,7 @@ export default function App() {
   const [classes, setClasses] = useState<ClassGroup[]>(INITIAL_CLASSES);
   const [lessons, setLessons] = useState<ArtLesson[]>(INITIAL_LESSONS);
   const [artworks, setArtworks] = useState<CommunityArtwork[]>([]);
+  const [stories, setStories] = useState<ArtworkStory[]>([]);
   const [comments, setComments] = useState<ArtworkComment[]>(INITIAL_COMMENTS);
   const [reports, setReports] = useState<ContentReport[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
@@ -159,9 +186,28 @@ export default function App() {
   // Modals & View States
   const [selectedArtworkForDetail, setSelectedArtworkForDetail] = useState<CommunityArtwork | null>(null);
   const [isInstantCaptureModalOpen, setIsInstantCaptureModalOpen] = useState(false);
-  const [projectorModalState, setProjectorModalState] = useState<{ isOpen: boolean; startIndex: number }>({
-    isOpen: false,
-    startIndex: 0
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const [projectorModalState, setProjectorModalState] = useState<{
+    isOpen: boolean;
+    startIndex: number;
+    joinSessionCode?: string | null;
+  }>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const liveCode = params.get('liveSession');
+      if (liveCode && liveCode.trim()) {
+        return {
+          isOpen: true,
+          startIndex: 0,
+          joinSessionCode: liveCode.trim().toUpperCase(),
+        };
+      }
+    }
+    return {
+      isOpen: false,
+      startIndex: 0,
+      joinSessionCode: null,
+    };
   });
   const [editingArtwork, setEditingArtwork] = useState<CommunityArtwork | null>(null);
   const [labelAndCertModalState, setLabelAndCertModalState] = useState<{
@@ -171,10 +217,20 @@ export default function App() {
   const [isArtbookExportModalOpen, setIsArtbookExportModalOpen] = useState<boolean>(false);
 
   const [reportModalData, setReportModalData] = useState<{
-    targetType: 'artwork' | 'comment';
+    targetType: 'artwork' | 'comment' | 'story';
     targetId: string;
     targetTitle: string;
   } | null>(null);
+
+  const [storyModalState, setStoryModalState] = useState<{
+    isOpen: boolean;
+    artwork: CommunityArtwork | null;
+    storyToEdit: ArtworkStory | null;
+  }>({
+    isOpen: false,
+    artwork: null,
+    storyToEdit: null,
+  });
 
   // Toast notification system
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -300,6 +356,60 @@ export default function App() {
     }
   }, [isTeacher, isAdmin]);
 
+  // 5B. Subscribe to Artwork Stories (Firestore + Backend /api/stories sync)
+  useEffect(() => {
+    let active = true;
+    let unsubFirestore: (() => void) | undefined;
+
+    const mergeStoriesList = (incoming: ArtworkStory[]) => {
+      if (!active) return;
+      setStories((prev) => {
+        const map = new Map<string, ArtworkStory>();
+        for (const s of prev) {
+          if (s && s.id) map.set(s.id, s);
+        }
+        for (const s of incoming) {
+          if (s && s.id) map.set(s.id, s);
+        }
+        return Array.from(map.values()).sort((a, b) =>
+          String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt))
+        );
+      });
+    };
+
+    try {
+      unsubFirestore = subscribeArtworkStories(
+        (fsStories) => {
+          mergeStoriesList(fsStories);
+        },
+        (err) => console.warn('Artwork stories Firestore listener notice:', err)
+      );
+    } catch (e) {
+      console.warn('Artwork stories Firestore subscription skipped:', e);
+    }
+
+    getValidBearerToken()
+      .then((token) =>
+        fetch(getApiUrl('/api/stories'), {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+      )
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.stories)) {
+          mergeStoriesList(data.stories);
+        }
+      })
+      .catch(() => {
+        // ignore offline fetch
+      });
+
+    return () => {
+      active = false;
+      if (unsubFirestore) unsubFirestore();
+    };
+  }, [profile?.uid, user?.uid, isTeacher, isAdmin, getValidBearerToken]);
+
   // 6. Auto-open Artwork Detail when scanning QR code link (#gallery?token=...)
   useEffect(() => {
     if (artworks.length === 0) return;
@@ -390,13 +500,35 @@ export default function App() {
     }
   };
 
-  // INSTANT GALLERY 2.0: Batch Publish Handler
-  const handleBatchPublishSuccess = (newArtworks: CommunityArtwork[]) => {
+  // INSTANT GALLERY 2.0: 9-Step Verified Batch Publish Handler
+  const handleBatchPublishSuccess = (
+    newArtworks: CommunityArtwork[],
+    reloadedArtworks?: CommunityArtwork[]
+  ) => {
     setArtworks((prev) => {
-      const existingIds = new Set(prev.map(a => a.id));
-      const uniqueNew = newArtworks.filter(a => !existingIds.has(a.id));
-      return [...uniqueNew, ...prev];
+      const baseList = reloadedArtworks && reloadedArtworks.length > 0 ? reloadedArtworks : prev;
+      const map = new Map<string, CommunityArtwork>();
+      for (const art of newArtworks) {
+        map.set(art.id, art);
+      }
+      for (const item of baseList) {
+        if (!map.has(item.id)) {
+          map.set(item.id, item);
+        }
+      }
+      return Array.from(map.values());
     });
+
+    // Ensure the user's newly uploaded artwork is not hidden by a different grade/lesson filter
+    if (
+      newArtworks.length > 0 &&
+      selectedClassFilter !== 'all' &&
+      !newArtworks.some((a) => a.classGroupId === selectedClassFilter)
+    ) {
+      setSelectedClassFilter('all');
+    }
+    setSelectedLessonFilter('all');
+    setCurrentTab('community-library');
 
     // Audit logs for each published artwork
     for (const art of newArtworks) {
@@ -407,6 +539,67 @@ export default function App() {
         art.status === 'approved'
           ? `Xuất bản tức thì vào ${art.className} (Đã lưu Cloud, khử sạch EXIF GPS).`
           : `Tác phẩm được chuyển vào Hàng chờ duyệt: ${art.moderation.moderatorNote || 'Chờ duyệt'}`
+      );
+    }
+  };
+
+  // Admin Image Editor: Save Edited Image to Storage & Firestore
+  const handleUpdateArtworkImage = async (
+    targetArtwork: CommunityArtwork,
+    editedBlob: Blob,
+    mode: 'overwrite' | 'new_copy'
+  ) => {
+    const targetId =
+      mode === 'new_copy'
+        ? `art-edit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
+        : targetArtwork.id;
+
+    const uploadRes = await uploadArtworkPhotoToStorageWithProgress(
+      editedBlob,
+      targetId,
+      true,
+      targetArtwork.publishedByTeacherId || user?.uid || 'admin'
+    );
+
+    const freshUrl = uploadRes.downloadUrl;
+    const nowStr = new Date().toLocaleDateString('vi-VN');
+
+    if (mode === 'overwrite') {
+      await updateCommunityArtworkInFirestore(targetArtwork.id, {
+        imageUrl: freshUrl,
+        imagePath: uploadRes.storagePath,
+        updatedAt: nowStr,
+      });
+      const updatedRecord: CommunityArtwork = {
+        ...targetArtwork,
+        imageUrl: freshUrl,
+        imagePath: uploadRes.storagePath,
+        updatedAt: nowStr,
+      };
+      setArtworks((prev) => prev.map((a) => (a.id === updatedRecord.id ? updatedRecord : a)));
+      setSelectedArtworkForDetail(updatedRecord);
+      showToast(
+        'success',
+        'Đã lưu ảnh chỉnh sửa',
+        `Ảnh của tác phẩm "${targetArtwork.title}" đã được cập nhật bền vững.`
+      );
+    } else {
+      const copyRecord: CommunityArtwork = {
+        ...targetArtwork,
+        id: targetId,
+        title: `${targetArtwork.title} (Bản trưng bày)`,
+        imageUrl: freshUrl,
+        imagePath: uploadRes.storagePath,
+        createdAt: nowStr,
+        updatedAt: nowStr,
+      };
+      const verifiedCopy = await createCommunityArtworkInFirestore(copyRecord);
+      setArtworks((prev) => [verifiedCopy, ...prev]);
+      setSelectedArtworkForDetail(verifiedCopy);
+      showToast(
+        'success',
+        'Đã lưu bản trưng bày mới',
+        `Đã tạo phiên bản "${verifiedCopy.title}" trong triển lãm.`
       );
     }
   };
@@ -678,8 +871,16 @@ export default function App() {
 
   const handleAddLesson = async (newLesson: ArtLesson) => {
     try {
-      await saveCommunityLessonInFirestore(newLesson);
-      showToast('success', 'Đã tạo bài học', `Bài học "${newLesson.title}" đã được lưu trên Firestore.`);
+      const saved = await saveCommunityLessonInFirestore(newLesson);
+      setLessons((prev) => {
+        const filtered = prev.filter((l) => l.id !== saved.id);
+        return [saved, ...filtered];
+      });
+      const refreshed = await getCommunityLessonsFromFirestore();
+      if (refreshed.length > 0) {
+        setLessons(refreshed);
+      }
+      showToast('success', 'Đã lưu bài học bền vững', `Bài học "${saved.title}" đã được lưu trên Firestore.`);
     } catch (err: any) {
       showToast('error', 'Lỗi lưu bài học', err.message || 'Thất bại');
     }
@@ -687,8 +888,18 @@ export default function App() {
 
   const handleUpdateLesson = async (updated: ArtLesson) => {
     try {
-      await saveCommunityLessonInFirestore(updated);
-      showToast('success', 'Đã cập nhật bài học', `Bài học "${updated.title}" đã được lưu.`);
+      const saved = await saveCommunityLessonInFirestore(updated);
+      setLessons((prev) => {
+        const exists = prev.some((l) => l.id === saved.id);
+        return exists
+          ? prev.map((l) => (l.id === saved.id ? saved : l))
+          : [saved, ...prev];
+      });
+      const refreshed = await getCommunityLessonsFromFirestore();
+      if (refreshed.length > 0) {
+        setLessons(refreshed);
+      }
+      showToast('success', 'Đã cập nhật bài học bền vững', `Bài học "${saved.title}" đã được lưu trên Firestore.`);
     } catch (err: any) {
       showToast('error', 'Lỗi cập nhật', err.message || 'Thất bại');
     }
@@ -698,7 +909,8 @@ export default function App() {
     const target = lessons.find(l => l.id === lessonId);
     if (!target) return;
     try {
-      await saveCommunityLessonInFirestore({ ...target, isHidden: !target.isHidden });
+      const saved = await saveCommunityLessonInFirestore({ ...target, isHidden: !target.isHidden });
+      setLessons((prev) => prev.map((l) => (l.id === saved.id ? saved : l)));
       showToast('info', 'Đã thay đổi hiển thị', `Bài học "${target.title}" đã được ${!target.isHidden ? 'ẩn' : 'hiển thị'}.`);
     } catch (err: any) {
       showToast('error', 'Lỗi máy chủ', err.message || 'Thất bại');
@@ -708,7 +920,14 @@ export default function App() {
   const handleDeleteLesson = async (lessonId: string) => {
     try {
       await deleteCommunityLessonInFirestore(lessonId);
-      showToast('success', 'Đã xóa bài học', 'Bài học đã được xóa khỏi Firestore.');
+      setLessons((prev) =>
+        prev.map((l) => (l.id === lessonId ? { ...l, status: 'deleted', isHidden: true } : l))
+      );
+      const refreshed = await getCommunityLessonsFromFirestore();
+      if (refreshed.length > 0) {
+        setLessons(refreshed);
+      }
+      showToast('success', 'Đã xóa bài học', 'Bài học đã được đánh dấu xóa bền vững trên Firestore.');
     } catch (err: any) {
       showToast('error', 'Lỗi xóa bài học', err.message || 'Thất bại');
     }
@@ -750,15 +969,79 @@ export default function App() {
   // Pending Moderation Count
   const pendingModerationCount =
     artworks.filter((a) => a.status === 'pending').length +
+    stories.filter((s) => s.status === 'pending').length +
     comments.filter((c) => c.status === 'pending').length +
     reports.filter((r) => r.status === 'open').length;
+
+  const handleOpenWriteStoryModal = (
+    artwork?: CommunityArtwork | null,
+    storyToEdit?: ArtworkStory | null
+  ) => {
+    setStoryModalState({
+      isOpen: true,
+      artwork: artwork || null,
+      storyToEdit: storyToEdit || null,
+    });
+  };
+
+  const handleModerateStory = async (
+    storyId: string,
+    status: ArtworkStoryStatus,
+    teacherNote?: string
+  ) => {
+    try {
+      const token = await getValidBearerToken();
+      const res = await fetch(getApiUrl(`/api/stories/${encodeURIComponent(storyId)}/moderate`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status, teacherNote }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Không thể cập nhật trạng thái câu chuyện.');
+      }
+
+      const updatedStory = data.story as ArtworkStory;
+      setStories((prev) => prev.map((s) => (s.id === storyId ? updatedStory : s)));
+
+      try {
+        await moderateArtworkStoryInFirestore(
+          storyId,
+          status,
+          teacherNote,
+          profile?.displayName || user?.displayName || 'Giáo viên Mĩ thuật'
+        );
+      } catch (fsErr) {
+        console.warn('Firestore story moderation mirror warning:', fsErr);
+      }
+
+      const labelMap: Record<ArtworkStoryStatus, string> = {
+        approved: 'Đã duyệt xuất bản câu chuyện công khai!',
+        revision_required: 'Đã gửi góp ý yêu cầu học sinh chỉnh sửa câu chuyện.',
+        rejected: 'Đã từ chối xuất bản câu chuyện.',
+        hidden: 'Đã tạm ẩn câu chuyện.',
+        pending: 'Đã chuyển câu chuyện về trạng thái chờ duyệt.',
+        draft: 'Đã chuyển câu chuyện về bản nháp.',
+      };
+      showToast('success', 'Đã cập nhật câu chuyện', labelMap[status]);
+    } catch (err: any) {
+      showToast(
+        'error',
+        'Lỗi duyệt câu chuyện',
+        err?.message || 'Không thể cập nhật trạng thái câu chuyện.'
+      );
+    }
+  };
 
   const handleQuickAction = () => {
     setIsInstantCaptureModalOpen(true);
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-[#121316] flex flex-col antialiased">
+    <div className="wonderland-workspace min-h-screen bg-[#F7F3EA] text-[#20243A] flex flex-col antialiased">
       {/* Offline Mode & Student Privacy Guarantee Banner */}
       <OfflineStatusBanner />
 
@@ -771,190 +1054,400 @@ export default function App() {
 
       {/* Cloud Persistence Status Banner */}
       {firestoreError && (
-        <div className="bg-rose-50 border-b border-rose-200 px-4 py-2.5 text-xs text-rose-800 flex items-center justify-between">
+        <div className="bg-rose-50 border-b border-rose-300 px-4 py-2.5 text-xs text-rose-900 flex items-center justify-between">
           <div className="flex items-center gap-2 max-w-4xl">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <span><strong>Lỗi kết nối Firestore:</strong> {firestoreError}</span>
           </div>
           <button 
             onClick={() => window.location.reload()}
-            className="px-3 py-1 bg-white border border-rose-300 rounded-lg text-rose-700 hover:bg-rose-100 font-semibold cursor-pointer shrink-0"
+            className="px-3 py-1 bg-white border border-rose-300 rounded-lg text-rose-800 hover:bg-rose-100 font-semibold cursor-pointer shrink-0"
           >
             Tải lại kết nối
           </button>
         </div>
       )}
 
-      <div className="flex-1 flex w-full">
-        {/* Desktop Sidebar (Hidden on iPhone screens) */}
-        <Sidebar
-          currentTab={currentTab}
-          onSelectTab={setCurrentTab}
-          isOpenMobile={isMobileMenuOpen}
-          onCloseMobile={() => setIsMobileMenuOpen(false)}
-          currentRole={currentRole}
-          pendingModerationCount={pendingModerationCount}
-        />
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <Header
+      {/* Contemporary Creative Gallery Main Stage */}
+      <div className="flex-1 flex flex-col w-full max-w-[1600px] mx-auto">
+        <div className="flex-1 flex w-full bg-[#F7F3EA] lg:border-x lg:border-[#20243A]/12 overflow-hidden">
+          {/* Desktop Perimeter Navigation Rail */}
+          <Sidebar
             currentTab={currentTab}
-            onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
-            onQuickAction={handleQuickAction}
             onSelectTab={setCurrentTab}
-            quickActionLabel="Đăng tác phẩm"
+            isOpenMobile={isMobileMenuOpen}
+            onCloseMobile={() => setIsMobileMenuOpen(false)}
+            currentRole={currentRole}
+            pendingModerationCount={pendingModerationCount}
           />
 
-          <main className="flex-1 p-4 md:p-6 lg:p-8 pb-safe-nav lg:pb-8 max-w-7xl w-full mx-auto">
-            {/* 0. Discover View (Trang Khám Phá) */}
-            {currentTab === 'discover' && (
-              <div className="space-y-4">
-                {isArtworksLoading ? (
-                  <div className="bg-white rounded-3xl border border-stone-200 p-14 text-center space-y-3">
-                    <RefreshCw className="w-8 h-8 text-[#1D4ED8] animate-spin mx-auto" />
-                    <h3 className="text-sm font-bold text-stone-800">Đang đồng bộ dữ liệu thật từ Cloud Firestore...</h3>
-                    <p className="text-xs text-stone-500">Đang tải không gian Khám phá &amp; Triển lãm Mĩ thuật</p>
-                  </div>
-                ) : (
-                  <DiscoverView
-                    artworks={artworks}
-                    classes={classes}
-                    lessons={lessons}
-                    currentRole={currentRole}
-                    currentAuthorKey={authorKey}
-                    onSelectArtwork={(art) => setSelectedArtworkForDetail(art)}
-                    onOpenUploadModal={() => setIsInstantCaptureModalOpen(true)}
-                    onOpenProjectorModal={(idx) => setProjectorModalState({ isOpen: true, startIndex: idx })}
-                    onNavigateTab={setCurrentTab}
-                    onSelectClassInGallery={(clsId) => {
-                      setSelectedClassFilter(clsId);
-                      setCurrentTab('community-library');
-                    }}
-                    onReaction={handleReaction}
-                  />
-                )}
+          {/* Main Exhibition Stage */}
+          <div className="flex-1 flex flex-col min-w-0 bg-[#F7F3EA]">
+            <Header
+              currentTab={currentTab}
+              onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+              onQuickAction={handleQuickAction}
+              onSelectTab={setCurrentTab}
+              onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
+              quickActionLabel="Đăng tác phẩm"
+            />
+
+            <main className="flex-1 px-4 py-5 md:px-6 md:py-7 lg:px-8 lg:py-8 pb-safe-nav lg:pb-12 max-w-7xl w-full mx-auto">
+              {/* 0. Discover View (Contemporary Creative Gallery Homepage) */}
+              {currentTab === 'discover' && (
+                <div className="space-y-4">
+                  {isArtworksLoading ? (
+                    <div className="bg-white rounded-lg border border-[#20243A]/12 p-14 text-center space-y-2.5">
+                      <RefreshCw className="w-6 h-6 text-[#3457D5] animate-spin mx-auto" />
+                      <h3 className="font-display text-lg font-bold text-[#20243A]">
+                        Đang tải Không gian Triển lãm...
+                      </h3>
+                      <p className="text-xs text-[#20243A]/60">
+                        Đồng bộ kho lưu trữ tác phẩm từ Cloud Firestore
+                      </p>
+                    </div>
+                  ) : (
+                    <DiscoverView
+                      artworks={artworks}
+                      stories={stories}
+                      classes={classes}
+                      lessons={lessons}
+                      currentRole={currentRole}
+                      currentAuthorKey={authorKey}
+                      onSelectArtwork={(art) => setSelectedArtworkForDetail(art)}
+                      onOpenUploadModal={() => setIsInstantCaptureModalOpen(true)}
+                      onOpenProjectorModal={(idx) =>
+                        setProjectorModalState({ isOpen: true, startIndex: idx })
+                      }
+                      onNavigateTab={setCurrentTab}
+                      onSelectClassInGallery={(clsId) => {
+                        setSelectedClassFilter(clsId);
+                        setCurrentTab('community-library');
+                      }}
+                      onReaction={handleReaction}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* 1. Digital Gallery (Triển lãm Nghệ thuật & Tự sự) */}
+              {(currentTab === 'community-library' || currentTab === 'library') && (
+                <div className="space-y-4">
+                  {isArtworksLoading ? (
+                    <div className="bg-white rounded-3xl border-2 border-[#E2D9F3] p-16 text-center space-y-3 shadow-sm">
+                      <RefreshCw className="w-8 h-8 text-[#8B5CF6] animate-spin mx-auto" />
+                      <h3 className="font-display text-xl font-extrabold text-[#1E1B4B]">
+                        Đang tải Không gian Triển lãm Nghệ thuật...
+                      </h3>
+                      <p className="text-xs text-[#5B587B]">
+                        Đọc các tác phẩm mĩ thuật công khai từ Cloud Firestore
+                      </p>
+                    </div>
+                  ) : (
+                    <CommunityLibraryView
+                      artworks={artworks}
+                      stories={stories}
+                      classes={classes}
+                      lessons={lessons}
+                      currentRole={currentRole}
+                      currentAuthorKey={authorKey}
+                      currentStudentUid={profile?.uid || user?.uid}
+                      selectedClassFilter={selectedClassFilter}
+                      onChangeClassFilter={setSelectedClassFilter}
+                      selectedLessonFilter={selectedLessonFilter}
+                      onChangeLessonFilter={setSelectedLessonFilter}
+                      onSelectArtwork={(art) => setSelectedArtworkForDetail(art)}
+                      onOpenInstantCaptureModal={() => setIsInstantCaptureModalOpen(true)}
+                      onOpenProjectorModal={(idx) =>
+                        setProjectorModalState({ isOpen: true, startIndex: idx })
+                      }
+                      onOpenArtbookExportModal={() => setIsArtbookExportModalOpen(true)}
+                      onOpenLabelAndCertificate={(art, tab) =>
+                        setLabelAndCertModalState({ artwork: art, tab })
+                      }
+                      onOpenWriteStoryModal={handleOpenWriteStoryModal}
+                      onModerateStory={handleModerateStory}
+                      onEditArtwork={(art) => setEditingArtwork(art)}
+                      onHideArtwork={handleHideArtwork}
+                      onUnhideArtwork={handleUnhideArtwork}
+                      onReaction={handleReaction}
+                      onDeleteArtwork={handleDeleteArtwork}
+                      onToggleShareStatus={handleToggleShare}
+                      onOpenReportModal={(targetType, targetId, targetTitle) => {
+                        setReportModalData({ targetType, targetId, targetTitle });
+                      }}
+                      onShowToast={showToast}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* 3. ARTVERSE SHORTS Dedicated Subsystem */}
+              {currentTab === 'artverse-shorts' && (
+                <ArtverseShortsView
+                  artworks={artworks}
+                  classes={classes}
+                  currentRole={currentRole}
+                  currentAuthorKey={authorKey}
+                  currentUserId={profile?.uid || user?.uid || 'anon-artist'}
+                  currentUserAlias={profile?.alias || profile?.displayName || nickname}
+                  onShortPublished={(newShort) => {
+                    setArtworks((prev) => [newShort, ...prev]);
+                  }}
+                  onApproveShort={(id) => handleApproveArtwork(id)}
+                  onHideShort={handleHideArtwork}
+                  onUnhideShort={handleUnhideArtwork}
+                  onDeleteShort={handleDeleteArtwork}
+                  onOpenReportModal={(targetType, targetId, targetTitle) => {
+                    setReportModalData({ targetType, targetId, targetTitle });
+                  }}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {/* 1B. Artverse Stories Dedicated View (4. CÂU CHUYỆN SAU NÉT VẼ) */}
+              {currentTab === 'art-stories' && (
+                <ArtworkStoriesSection
+                  stories={stories}
+                  artworks={artworks}
+                  lessons={lessons}
+                  onOpenArtworkDetail={(art) => setSelectedArtworkForDetail(art)}
+                  onOpenWriteStoryModal={handleOpenWriteStoryModal}
+                  onModerateStory={handleModerateStory}
+                  onReportStory={(story) =>
+                    setReportModalData({
+                      targetType: 'story',
+                      targetId: story.id,
+                      targetTitle: story.storyTitle,
+                    })
+                  }
+                />
+              )}
+
+              {/* 5. MĨ THUẬT GDPT (Kho Tài nguyên Giảng dạy Mỹ thuật) */}
+              {currentTab === 'class-lessons' && (
+                <ClassLessonManagerView
+                  classes={classes}
+                  lessons={lessons}
+                  artworks={artworks}
+                  currentRole={currentRole}
+                  onAddClass={handleAddClass}
+                  onUpdateClass={handleUpdateClass}
+                  onToggleHideClass={handleToggleHideClass}
+                  onTogglePublicGalleryEnabled={handleTogglePublicGallery}
+                  onDeleteClass={handleDeleteClass}
+                  onAddLesson={handleAddLesson}
+                  onUpdateLesson={handleUpdateLesson}
+                  onToggleHideLesson={handleToggleHideLesson}
+                  onDeleteLesson={handleDeleteLesson}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {/* 6. ĐĂNG TẢI (Upload Hub — 5 mục đăng tải chính thức) */}
+              {currentTab === 'upload-hub' && (
+                <UploadHubView
+                  currentRole={currentRole}
+                  onSelectUploadArtwork={() => setIsInstantCaptureModalOpen(true)}
+                  onSelectUploadShort={() => setCurrentTab('artverse-shorts')}
+                  onSelectUploadStory={() => handleOpenWriteStoryModal(null, null)}
+                  onSelectUploadGdpt={() => setCurrentTab('class-lessons')}
+                />
+              )}
+
+              {/* IV. NHÓM CÔNG CỤ QUẢN LÝ */}
+              {currentTab === 'management-tools' && (
+                <ManagementAndAdminView
+                  mode="management"
+                  currentRole={currentRole}
+                  onChangeRole={setCurrentRole}
+                  classes={classes}
+                  lessons={lessons}
+                  artworks={artworks}
+                  stories={stories}
+                  comments={comments}
+                  reports={reports}
+                  auditLogs={auditLogs}
+                  onAddClass={handleAddClass}
+                  onUpdateClass={handleUpdateClass}
+                  onToggleHideClass={handleToggleHideClass}
+                  onTogglePublicGallery={handleTogglePublicGallery}
+                  onDeleteClass={handleDeleteClass}
+                  onApproveArtwork={handleApproveArtwork}
+                  onRejectArtwork={handleRejectArtwork}
+                  onHideArtwork={handleHideArtwork}
+                  onUnhideArtwork={handleUnhideArtwork}
+                  onDeleteArtwork={handleDeleteArtwork}
+                  onModerateStory={handleModerateStory}
+                  onApproveComment={handleApproveComment}
+                  onRejectComment={handleRejectComment}
+                  onResolveReport={handleResolveReport}
+                  onUpdateReportStatus={handleUpdateReportStatus}
+                  onSelectArtwork={(art) => setSelectedArtworkForDetail(art)}
+                  onOpenUploadModal={() => setIsInstantCaptureModalOpen(true)}
+                  onOpenProjectorModal={(idx) =>
+                    setProjectorModalState({ isOpen: true, startIndex: idx })
+                  }
+                  onArtworkDeleted={(artworkId) => {
+                    setArtworks((prev) => prev.filter((a) => a.id !== artworkId));
+                  }}
+                  onArtworkRecovered={(recoveredArt) => {
+                    setArtworks((prev) => [recoveredArt, ...prev]);
+                  }}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {/* V. NHÓM QUẢN TRỊ HỆ THỐNG */}
+              {currentTab === 'system-admin' && (
+                <ManagementAndAdminView
+                  mode="admin"
+                  currentRole={currentRole}
+                  onChangeRole={setCurrentRole}
+                  classes={classes}
+                  lessons={lessons}
+                  artworks={artworks}
+                  stories={stories}
+                  comments={comments}
+                  reports={reports}
+                  auditLogs={auditLogs}
+                  onAddClass={handleAddClass}
+                  onUpdateClass={handleUpdateClass}
+                  onToggleHideClass={handleToggleHideClass}
+                  onTogglePublicGallery={handleTogglePublicGallery}
+                  onDeleteClass={handleDeleteClass}
+                  onApproveArtwork={handleApproveArtwork}
+                  onRejectArtwork={handleRejectArtwork}
+                  onHideArtwork={handleHideArtwork}
+                  onUnhideArtwork={handleUnhideArtwork}
+                  onDeleteArtwork={handleDeleteArtwork}
+                  onModerateStory={handleModerateStory}
+                  onApproveComment={handleApproveComment}
+                  onRejectComment={handleRejectComment}
+                  onResolveReport={handleResolveReport}
+                  onUpdateReportStatus={handleUpdateReportStatus}
+                  onSelectArtwork={(art) => setSelectedArtworkForDetail(art)}
+                  onOpenUploadModal={() => setIsInstantCaptureModalOpen(true)}
+                  onOpenProjectorModal={(idx) =>
+                    setProjectorModalState({ isOpen: true, startIndex: idx })
+                  }
+                  onArtworkDeleted={(artworkId) => {
+                    setArtworks((prev) => prev.filter((a) => a.id !== artworkId));
+                  }}
+                  onArtworkRecovered={(recoveredArt) => {
+                    setArtworks((prev) => [recoveredArt, ...prev]);
+                  }}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {/* 3B. Gemini AI Art Chatbox Full-Page View */}
+              {currentTab === 'ai-chatbox' && (
+                <GeminiArtChatbox
+                  lessons={lessons}
+                  isFullPage={true}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {/* 4. Moderation Queue View (Teacher, Moderator, Admin) */}
+              {currentTab === 'moderation' && (
+                <ModerationQueueView
+                  artworks={artworks}
+                  comments={comments}
+                  reports={reports}
+                  currentRole={currentRole}
+                  currentModeratorName={user?.displayName || 'Tổ Kiểm duyệt Mĩ thuật'}
+                  onApproveArtwork={handleApproveArtwork}
+                  onRejectArtwork={handleRejectArtwork}
+                  onHideArtwork={handleHideArtwork}
+                  onRemoveArtwork={handleRemoveArtwork}
+                  onApproveComment={handleApproveComment}
+                  onRejectComment={handleRejectComment}
+                  onResolveReport={handleResolveReport}
+                  onUpdateReportStatus={handleUpdateReportStatus}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {/* 5. Safety & RBAC Audit View */}
+              {currentTab === 'safety-audit' && (
+                <SafetyAuditView
+                  currentRole={currentRole}
+                  onChangeRole={setCurrentRole}
+                  currentAuthorKey={authorKey}
+                  currentNickname={nickname}
+                  auditLogs={auditLogs}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {/* 5B. Storage Management Center View (Admin / Teacher / Moderator) */}
+              {currentTab === 'storage-center' && (
+                <StorageManagementCenterView
+                  artworks={artworks}
+                  currentRole={currentRole}
+                  currentUserId={profile?.uid || user?.uid || 'teacher-auth'}
+                  currentUserName={profile?.alias || profile?.displayName || user?.displayName || 'Giáo viên Mĩ thuật'}
+                  onOpenUploadModal={() => setIsInstantCaptureModalOpen(true)}
+                  onSelectArtwork={(art) => setSelectedArtworkForDetail(art)}
+                  onArtworkDeleted={(artworkId) => {
+                    setArtworks((prev) => prev.filter((a) => a.id !== artworkId));
+                    if (selectedArtworkForDetail?.id === artworkId) {
+                      setSelectedArtworkForDetail(null);
+                    }
+                  }}
+                  onArtworkRecovered={(recoveredArt) => {
+                    setArtworks((prev) => {
+                      const exists = prev.some((a) => a.id === recoveredArt.id);
+                      if (exists) {
+                        return prev.map((a) => (a.id === recoveredArt.id ? recoveredArt : a));
+                      }
+                      return [recoveredArt, ...prev];
+                    });
+                  }}
+                  onNavigateBack={() => setCurrentTab('discover')}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {/* 7. HỒ SƠ CÁ NHÂN */}
+              {currentTab === 'profile-manage' && (
+                <ProfileManagementView
+                  currentRole={currentRole}
+                  onSelectRole={setCurrentRole}
+                  onNavigateTab={setCurrentTab}
+                  onOpenArtbookExportModal={() => setIsArtbookExportModalOpen(true)}
+                  pendingModerationCount={pendingModerationCount}
+                  artworksCount={artworks.length}
+                  classesCount={classes.length}
+                  lessonsCount={lessons.length}
+                  authorKey={authorKey}
+                  nickname={nickname}
+                  artworks={artworks}
+                  stories={stories}
+                  lessons={lessons}
+                  onSelectArtwork={(art) => setSelectedArtworkForDetail(art)}
+                  onOpenWriteStoryModal={handleOpenWriteStoryModal}
+                  onShowToast={showToast}
+                />
+              )}
+            </main>
+
+            {/* Official Brand Footer (Section I. QUY CHUẨN THƯƠNG HIỆU — ART VERSE AI) */}
+            <footer className="border-t border-[#20243A]/12 bg-white px-4 py-4 md:px-8 text-xs text-[#20243A]/65 flex flex-col sm:flex-row items-center justify-between gap-2 pb-safe-nav lg:pb-4">
+              <div className="flex items-center gap-2">
+                <span className="font-display font-black text-[#20243A] tracking-tight">
+                  ART VERSE AI
+                </span>
+                <span>·</span>
+                <span>Không gian Triển lãm Nghệ thuật Đương đại &amp; Học liệu Mĩ thuật GDPT</span>
               </div>
-            )}
-
-            {/* 1. Digital Gallery (Triển lãm) */}
-            {(currentTab === 'community-library' || currentTab === 'library') && (
-              <div className="space-y-4">
-                {isArtworksLoading ? (
-                  <div className="bg-white rounded-3xl border border-stone-200 p-14 text-center space-y-3">
-                    <RefreshCw className="w-8 h-8 text-[#1D4ED8] animate-spin mx-auto" />
-                    <h3 className="text-sm font-bold text-stone-800">Đang đồng bộ dữ liệu thật từ Cloud Firestore...</h3>
-                    <p className="text-xs text-stone-500">Đọc các tác phẩm mĩ thuật công khai được bảo vệ an toàn</p>
-                  </div>
-                ) : (
-                  <CommunityLibraryView
-                    artworks={artworks}
-                    classes={classes}
-                    lessons={lessons}
-                    currentRole={currentRole}
-                    currentAuthorKey={authorKey}
-                    selectedClassFilter={selectedClassFilter}
-                    onChangeClassFilter={setSelectedClassFilter}
-                    selectedLessonFilter={selectedLessonFilter}
-                    onChangeLessonFilter={setSelectedLessonFilter}
-                    onSelectArtwork={(art) => setSelectedArtworkForDetail(art)}
-                    onOpenInstantCaptureModal={() => setIsInstantCaptureModalOpen(true)}
-                    onOpenProjectorModal={(idx) => setProjectorModalState({ isOpen: true, startIndex: idx })}
-                    onOpenArtbookExportModal={() => setIsArtbookExportModalOpen(true)}
-                    onOpenLabelAndCertificate={(art, tab) => setLabelAndCertModalState({ artwork: art, tab })}
-                    onEditArtwork={(art) => setEditingArtwork(art)}
-                    onHideArtwork={handleHideArtwork}
-                    onUnhideArtwork={handleUnhideArtwork}
-                    onReaction={handleReaction}
-                    onDeleteArtwork={handleDeleteArtwork}
-                    onToggleShareStatus={handleToggleShare}
-                    onOpenReportModal={(targetType, targetId, targetTitle) => {
-                      setReportModalData({ targetType, targetId, targetTitle });
-                    }}
-                    onShowToast={showToast}
-                  />
-                )}
+              <div className="font-mono-code text-[11px] text-[#20243A]/55">
+                ART VERSE AI · ARTVERSE SHORTS · CONTEMPORARY CREATIVE GALLERY
               </div>
-            )}
-
-            {/* 2. Class & Lesson Manager View (Lớp học & Tham khảo Bài học Khối 6, 7, 8, 9) */}
-            {currentTab === 'class-lessons' && (
-              <ClassLessonManagerView
-                classes={classes}
-                lessons={lessons}
-                artworks={artworks}
-                currentRole={currentRole}
-                onAddClass={handleAddClass}
-                onUpdateClass={handleUpdateClass}
-                onToggleHideClass={handleToggleHideClass}
-                onTogglePublicGalleryEnabled={handleTogglePublicGallery}
-                onDeleteClass={handleDeleteClass}
-                onAddLesson={handleAddLesson}
-                onUpdateLesson={handleUpdateLesson}
-                onToggleHideLesson={handleToggleHideLesson}
-                onDeleteLesson={handleDeleteLesson}
-                onShowToast={showToast}
-              />
-            )}
-
-            {/* 3B. Gemini AI Art Chatbox Full-Page View */}
-            {currentTab === 'ai-chatbox' && (
-              <GeminiArtChatbox
-                lessons={lessons}
-                isFullPage={true}
-                onShowToast={showToast}
-              />
-            )}
-
-            {/* 4. Moderation Queue View (Teacher, Moderator, Admin) */}
-            {currentTab === 'moderation' && (
-              <ModerationQueueView
-                artworks={artworks}
-                comments={comments}
-                reports={reports}
-                currentRole={currentRole}
-                currentModeratorName={user?.displayName || "Tổ Kiểm duyệt Mĩ thuật"}
-                onApproveArtwork={handleApproveArtwork}
-                onRejectArtwork={handleRejectArtwork}
-                onHideArtwork={handleHideArtwork}
-                onRemoveArtwork={handleRemoveArtwork}
-                onApproveComment={handleApproveComment}
-                onRejectComment={handleRejectComment}
-                onResolveReport={handleResolveReport}
-                onUpdateReportStatus={handleUpdateReportStatus}
-                onShowToast={showToast}
-              />
-            )}
-
-            {/* 5. Safety & RBAC Audit View */}
-            {currentTab === 'safety-audit' && (
-              <SafetyAuditView
-                currentRole={currentRole}
-                onChangeRole={setCurrentRole}
-                currentAuthorKey={authorKey}
-                currentNickname={nickname}
-                auditLogs={auditLogs}
-                onShowToast={showToast}
-              />
-            )}
-
-            {/* 6. Profile & Management Hub (Cá nhân / Quản lý) */}
-            {currentTab === 'profile-manage' && (
-              <ProfileManagementView
-                currentRole={currentRole}
-                onSelectRole={setCurrentRole}
-                onNavigateTab={setCurrentTab}
-                onOpenArtbookExportModal={() => setIsArtbookExportModalOpen(true)}
-                pendingModerationCount={pendingModerationCount}
-                artworksCount={artworks.length}
-                classesCount={classes.length}
-                lessonsCount={lessons.length}
-                authorKey={authorKey}
-                nickname={nickname}
-                onShowToast={showToast}
-              />
-            )}
-          </main>
+            </footer>
+          </div>
         </div>
       </div>
 
@@ -967,24 +1460,78 @@ export default function App() {
       />
 
       {/* Artwork Detail Modal */}
-      {selectedArtworkForDetail && (
-        <ArtworkDetailModal
-          artwork={selectedArtworkForDetail}
-          comments={comments.filter(c => c.artworkId === selectedArtworkForDetail.id)}
-          currentRole={currentRole}
-          userAuthorKey={authorKey}
-          onClose={() => setSelectedArtworkForDetail(null)}
-          onHideArtwork={handleHideArtwork}
-          onDeleteArtwork={handleDeleteArtwork}
-          onToggleShare={(artworkId) => handleToggleShare(artworkId)}
-          onReact={handleReaction}
-          onOpenReportModal={(targetType: 'artwork' | 'comment', targetId: string, targetTitle: string) => {
-            setReportModalData({ targetType, targetId, targetTitle });
-          }}
-          onOpenLabelAndCertificate={(art, tab) => setLabelAndCertModalState({ artwork: art, tab })}
-          onShowToast={showToast}
-        />
-      )}
+      {selectedArtworkForDetail && (() => {
+        const navPool = artworks.filter(
+          (a) => isTeacher || isAdmin || (a.status === 'approved' && a.shareStatus === 'shared')
+        );
+        const currentIndex = navPool.findIndex((a) => a.id === selectedArtworkForDetail.id);
+        const hasPrev = currentIndex > 0;
+        const hasNext = currentIndex >= 0 && currentIndex < navPool.length - 1;
+
+        return (
+          <ArtworkDetailModal
+            artwork={selectedArtworkForDetail}
+            allArtworks={artworks}
+            story={
+              stories.find(
+                (s) =>
+                  s.artworkId === selectedArtworkForDetail.id &&
+                  (s.status === 'approved' ||
+                    isTeacher ||
+                    isAdmin ||
+                    (profile?.uid && s.authorAccountId === profile.uid))
+              ) || null
+            }
+            comments={comments.filter(c => c.artworkId === selectedArtworkForDetail.id)}
+            currentRole={currentRole}
+            userAuthorKey={authorKey}
+            currentStudentUid={profile?.uid || user?.uid}
+            onClose={() => setSelectedArtworkForDetail(null)}
+            onSelectArtwork={(art) => setSelectedArtworkForDetail(art)}
+            hasPrevArtwork={hasPrev}
+            hasNextArtwork={hasNext}
+            onPrevArtwork={
+              hasPrev ? () => setSelectedArtworkForDetail(navPool[currentIndex - 1]) : undefined
+            }
+            onNextArtwork={
+              hasNext ? () => setSelectedArtworkForDetail(navPool[currentIndex + 1]) : undefined
+            }
+            onOpenWriteStoryModal={(art) => handleOpenWriteStoryModal(art, null)}
+            onHideArtwork={handleHideArtwork}
+            onDeleteArtwork={handleDeleteArtwork}
+            onUpdateArtworkImage={handleUpdateArtworkImage}
+            onToggleShare={(artworkId) => handleToggleShare(artworkId)}
+            onReact={handleReaction}
+            onOpenReportModal={(targetType: 'artwork' | 'comment' | 'story', targetId: string, targetTitle: string) => {
+              setReportModalData({ targetType, targetId, targetTitle });
+            }}
+            onOpenLabelAndCertificate={(art, tab) => setLabelAndCertModalState({ artwork: art, tab })}
+            onShowToast={showToast}
+          />
+        );
+      })()}
+
+      {/* Student Storytelling Modal (Artverse Stories) */}
+      <StudentStoryModal
+        isOpen={storyModalState.isOpen}
+        onClose={() =>
+          setStoryModalState({ isOpen: false, artwork: null, storyToEdit: null })
+        }
+        initialArtwork={storyModalState.artwork}
+        initialStory={storyModalState.storyToEdit}
+        artworks={artworks}
+        existingStories={stories}
+        onStorySaved={(savedStory) => {
+          setStories((prev) => {
+            const exists = prev.some((s) => s.id === savedStory.id);
+            if (exists) {
+              return prev.map((s) => (s.id === savedStory.id ? savedStory : s));
+            }
+            return [savedStory, ...prev];
+          });
+        }}
+        onShowToast={showToast}
+      />
 
       {/* Exhibition QR Label & Digital Certificate Modal */}
       {labelAndCertModalState && (
@@ -1015,21 +1562,30 @@ export default function App() {
           classes={classes}
           lessons={lessons}
           currentRole={currentRole}
-          currentUserId={user?.uid || 'teacher-auth'}
-          currentUserName={profile?.displayName || user?.displayName || 'Giáo viên Mĩ thuật'}
+          currentUserId={profile?.uid || user?.uid || 'teacher-auth'}
+          currentUserName={profile?.alias || profile?.displayName || user?.displayName || 'Giáo viên Mĩ thuật'}
+          currentUserAlias={profile?.alias || profile?.displayName || nickname}
           onClose={() => setIsInstantCaptureModalOpen(false)}
           onBatchPublishSuccess={handleBatchPublishSuccess}
           onShowToast={showToast}
         />
       )}
 
-      {/* Classroom Projector Slideshow Modal */}
+      {/* Classroom Projector & Multi-Device Live Presentation Modal */}
       {projectorModalState.isOpen && (
         <ProjectorSlideshowModal
           artworks={artworks.filter((a) => a.status === 'approved' && a.shareStatus === 'shared')}
+          classes={classes}
+          lessons={lessons}
           initialIndex={projectorModalState.startIndex}
-          onClose={() => setProjectorModalState({ isOpen: false, startIndex: 0 })}
+          initialClassFilter={selectedClassFilter}
+          initialLessonFilter={selectedLessonFilter}
+          initialJoinSessionCode={projectorModalState.joinSessionCode}
+          onClose={() =>
+            setProjectorModalState({ isOpen: false, startIndex: 0, joinSessionCode: null })
+          }
           onReact={handleReaction}
+          onShowToast={showToast}
         />
       )}
 
@@ -1057,16 +1613,43 @@ export default function App() {
         />
       )}
 
-      {/* Floating Gemini AI Art Chatbox Widget (shown on all tabs except full-page ai-chatbox) */}
-      {currentTab !== 'ai-chatbox' && (
-        <GeminiArtChatbox
-          lessons={lessons}
-          isFullPage={false}
-          isOpenFloating={isFloatingChatOpen}
-          onToggleFloating={setIsFloatingChatOpen}
-          onShowToast={showToast}
-        />
-      )}
+      {/* Floating Gemini AI Art Chatbox Widget (shown on all tabs except full-page ai-chatbox, hidden for Teachers) */}
+      {currentTab !== 'ai-chatbox' &&
+        currentRole !== 'teacher' &&
+        currentRole !== 'moderator' && (
+          <GeminiArtChatbox
+            lessons={lessons}
+            isFullPage={false}
+            isOpenFloating={isFloatingChatOpen}
+            onToggleFloating={setIsFloatingChatOpen}
+            onShowToast={showToast}
+          />
+        )}
+
+      {/* Student PIN Login Modal (Method A: Class Code + Student Code + 6-digit PIN) */}
+      <StudentPinLoginModal
+        isOpen={isStudentLoginModalOpen}
+        onClose={() => setIsStudentLoginModalOpen(false)}
+        onLoginSuccess={() => {
+          showToast(
+            'success',
+            'Đăng nhập Học sinh thành công!',
+            'Chào mừng em đến với Không gian Học tập & Sáng tạo ART VERSE AI.'
+          );
+        }}
+      />
+
+      {/* Global Search Modal (THANH TÌM KIẾM TOÀN CỤC) */}
+      <GlobalSearchModal
+        isOpen={isGlobalSearchOpen}
+        onClose={() => setIsGlobalSearchOpen(false)}
+        artworks={artworks}
+        stories={stories}
+        lessons={lessons}
+        currentRole={currentRole}
+        onSelectArtwork={(art) => setSelectedArtworkForDetail(art)}
+        onNavigateTab={setCurrentTab}
+      />
 
       {/* Global Toast Container */}
       <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />

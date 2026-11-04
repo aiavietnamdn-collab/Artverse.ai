@@ -33,6 +33,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'aiavietnam.dn@gmail.com' ||
+        request.auth.token.role == 'admin' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
@@ -41,9 +42,24 @@ service cloud.firestore {
     function isTeacher() {
       return isSignedIn() && (
         isAdmin() ||
+        request.auth.token.role == 'teacher' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher')
       );
+    }
+
+    function isStudent() {
+      return isSignedIn() && (
+        request.auth.token.role == 'student' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['student', 'viewer'])
+      );
+    }
+
+    // Enforce that a student with a bound classGroupId cannot write outside their own class
+    function matchesStudentClassScope(targetClassGroupId) {
+      return !(request.auth != null && request.auth.token.role == 'student' && 'classGroupId' in request.auth.token) ||
+             request.auth.token.classGroupId == targetClassGroupId;
     }
 
     // Reaction increment hardening: prevents arbitrary overwriting or jumping of reaction counters
@@ -94,48 +110,177 @@ service cloud.firestore {
       return isAdmin() || isTeacher() || (isSignedIn() && artworkData.publishedByTeacherId == request.auth.uid);
     }
 
-    // 1. Users collection: Isolated profile
+    // 1. Users collection: Isolated profile — only Admin can assign 'teacher' or 'admin' role; students cannot read other users' private profiles
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
+      allow get: if isOwner(userId) || isAdmin() || isTeacher();
       allow list: if isAdmin() || isTeacher();
-      allow create: if isOwner(userId) && (
+      allow create: if (isOwner(userId) && (
         (!incoming().keys().hasAny(['role'])) ||
-        (incoming().role in ['viewer', 'teacher']) ||
-        isAdmin()
-      );
-      allow update: if isOwner(userId) && (
-        (!incoming().diff(existing()).affectedKeys().hasAny(['role'])) ||
-        (incoming().role in ['viewer', 'teacher']) ||
-        isAdmin()
-      );
+        (incoming().role in ['viewer', 'student'])
+      )) || isAdmin();
+      allow update: if (isOwner(userId) && (
+        !incoming().diff(existing()).affectedKeys().hasAny(['role', 'classCode', 'classGroupId', 'studentCode', 'status', 'fullName'])
+      )) || isAdmin();
       allow delete: if isAdmin();
     }
 
-    // 2. Community Artworks (INSTANT GALLERY 2.0 Rules)
+    // 1b. Student Accounts collection (Phương án A - PHẦN A & G):
+    // - Hashed PIN only (never plain PIN)
+    // - `fullName` (Tên HS) is strictly private to owning Teacher and Admin; students cannot list or read other students' accounts
+    // - Students can only update their own `alias`, `displayName`, and `needsAliasSetup`
+    match /studentAccounts/{studentId} {
+      allow get: if isAdmin() ||
+        (isTeacher() && resource.data.teacherId == request.auth.uid) ||
+        isOwner(studentId);
+      allow list: if isAdmin() || isTeacher();
+      allow create: if isValidId(studentId) &&
+        !incoming().keys().hasAny(['pin', 'plainPin', 'rawPin']) &&
+        incoming().role == 'student' &&
+        incoming().status in ['active', 'locked'] &&
+        incoming().pinHash is string &&
+        incoming().pinHash.size() >= 50 &&
+        (isAdmin() || (isTeacher() && incoming().teacherId == request.auth.uid));
+      allow update: if isValidId(studentId) &&
+        !incoming().keys().hasAny(['pin', 'plainPin', 'rawPin']) &&
+        incoming().role == 'student' && (
+          isAdmin() ||
+          (isTeacher() && existing().teacherId == request.auth.uid && incoming().teacherId == existing().teacherId) ||
+          (isOwner(studentId) &&
+           incoming().diff(existing()).affectedKeys().hasOnly(['alias', 'displayName', 'needsAliasSetup', 'updatedAt']))
+        );
+      allow delete: if isAdmin() || (isTeacher() && existing().teacherId == request.auth.uid);
+    }
+
+    // 2. Community Artworks (INSTANT GALLERY 2.0 + STORAGE MANAGEMENT & VIDEO UPLOAD ENGINE)
+    // Public artworks only store `authorAlias` / `authorNickname` / `creatorAnonymousPseudonym`, never student `fullName` or `pinHash`
     match /communityArtworks/{artworkId} {
       allow get, list: if true;
 
-      // Allow creating valid artwork documents
       allow create: if isValidId(artworkId) &&
+        !incoming().keys().hasAny(['fullName', 'pin', 'pinHash', 'plainPin']) &&
         incoming().title is string &&
         incoming().title.size() > 0 &&
         incoming().title.size() <= 300 &&
-        incoming().status in ['approved', 'pending', 'draft', 'hidden'] &&
-        incoming().shareStatus in ['private', 'shared'];
+        incoming().status in ['approved', 'pending', 'draft', 'hidden', 'removed'] &&
+        incoming().shareStatus in ['private', 'shared'] &&
+        (!('mediaType' in incoming()) || incoming().mediaType in ['image', 'video']) &&
+        (!('duration' in incoming()) || (incoming().duration is number && incoming().duration >= 0 && incoming().duration <= 180)) &&
+        (!('fileSize' in incoming()) || (incoming().fileSize is number && incoming().fileSize >= 0 && incoming().fileSize <= 104857600)) &&
+        matchesStudentClassScope(incoming().classGroupId);
 
-      // Allow reaction increments, owner updates (matching ownerKey), or teacher/admin updates
-      allow update: if isValidId(artworkId) && (
+      allow update: if isValidId(artworkId) &&
+        !incoming().keys().hasAny(['fullName', 'pin', 'pinHash', 'plainPin']) && (
         (incoming().diff(existing()).affectedKeys().hasOnly(['reactions', 'updatedAt']) &&
          isValidReactionIncrement(existing().reactions, incoming().reactions)) ||
         isArtworkManager(existing()) ||
-        (existing().keys().hasAny(['ownerKey']) && incoming().ownerKey == existing().ownerKey)
+        (existing().keys().hasAny(['ownerKey']) &&
+         incoming().ownerKey == existing().ownerKey &&
+         incoming().classGroupId == existing().classGroupId &&
+         matchesStudentClassScope(existing().classGroupId) &&
+         !incoming().diff(existing()).affectedKeys().hasAny(['emotionCounts', 'emotionUsers'])) ||
+        (existing().keys().hasAny(['authorId']) &&
+         incoming().authorId == existing().authorId &&
+         incoming().classGroupId == existing().classGroupId &&
+         matchesStudentClassScope(existing().classGroupId) &&
+         !incoming().diff(existing()).affectedKeys().hasAny(['emotionCounts', 'emotionUsers']))
       );
 
-      // Deleting artwork: managing teacher/admin or artwork owner
       allow delete: if isValidId(artworkId) && (
         isArtworkManager(existing()) ||
-        true
+        (existing().keys().hasAny(['ownerKey']) && matchesStudentClassScope(existing().classGroupId))
       );
+
+      // Subcollection reactions under communityArtworks/{artworkId}/reactions/{uid}
+      match /reactions/{uid} {
+        allow get, list: if true;
+        allow create, update: if isValidId(artworkId) &&
+          isSignedIn() &&
+          request.auth.uid == uid &&
+          incoming().uid == request.auth.uid &&
+          incoming().reactionType in ['heart', 'like', 'laugh', 'sad', 'angry', 'love', 'haha'] &&
+          incoming().keys().hasOnly(['uid', 'reactionType', 'createdAt', 'updatedAt', 'artworkId']) &&
+          !incoming().keys().hasAny(['counts', 'totalCount', 'emotionCounts', 'fullName', 'email', 'studentCode', 'pin', 'pinHash']);
+        allow delete: if isValidId(artworkId) &&
+          isSignedIn() &&
+          request.auth.uid == uid;
+      }
+    }
+
+    // 2.1 Canonical Artwork 5-Emotion Subcollection: artworks/{artworkId}/reactions/{uid}
+    // - Strictly 1 document per authenticated user UID per artwork
+    // - User (including Teacher/Admin) can ONLY write/delete their own UID document (no UID spoofing)
+    // - Only 5 valid reactionType values accepted
+    // - Clients cannot write aggregate counters
+    match /artworks/{artworkId} {
+      allow get, list: if true;
+
+      match /reactions/{uid} {
+        allow get, list: if true;
+        allow create, update: if isValidId(artworkId) &&
+          isSignedIn() &&
+          request.auth.uid == uid &&
+          incoming().uid == request.auth.uid &&
+          incoming().reactionType in ['heart', 'like', 'laugh', 'sad', 'angry', 'love', 'haha'] &&
+          incoming().keys().hasOnly(['uid', 'reactionType', 'createdAt', 'updatedAt', 'artworkId']) &&
+          !incoming().keys().hasAny(['counts', 'totalCount', 'emotionCounts', 'fullName', 'email', 'studentCode', 'pin', 'pinHash']);
+        allow delete: if isValidId(artworkId) &&
+          isSignedIn() &&
+          request.auth.uid == uid;
+      }
+    }
+
+    // 2a. Media Deletion Audit Logs & Storage Quota Config (Storage Management Center - Phần 7 & 8)
+    match /mediaDeletionLogs/{logId} {
+      allow get, list: if isTeacher();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
+    match /storageQuotaConfigs/{configId} {
+      allow get, list: if isTeacher();
+      allow create, update: if isTeacher();
+      allow delete: if isAdmin();
+    }
+
+    // 2b. Legacy Artwork Reactions Summary (Read-only for clients; aggregate counters cannot be forged by students)
+    match /artworkReactions/{artworkId} {
+      allow get, list: if true;
+      allow create, update, delete: if false;
+    }
+
+    // 2c. ARTVERSE STORIES — Câu chuyện sau nét vẽ (/artworkStories/{storyId})
+    // - Preserves and reconnects existing stories in artworkStories collection
+    // - Students can create/edit their own drafts ('draft') or submit for review ('pending'), never self-approve
+    // - Teachers and Admins moderate stories ('approved', 'revision_required', 'rejected', 'hidden')
+    // - Never allows Base64 video data or student PII
+    match /artworkStories/{storyId} {
+      allow get, list: if true;
+
+      allow create: if isValidId(storyId) &&
+        !incoming().keys().hasAny(['fullName', 'pin', 'pinHash', 'plainPin', 'email', 'studentCode', 'phone']) &&
+        incoming().storyTitle is string &&
+        incoming().storyTitle.size() > 0 &&
+        incoming().storyTitle.size() <= 300 &&
+        incoming().storyContent is string &&
+        incoming().storyContent.size() > 0 &&
+        incoming().storyContent.size() <= 5000 &&
+        (!('artworkVideoUrl' in incoming()) || !(incoming().artworkVideoUrl is string && incoming().artworkVideoUrl.matches('^data:video/.*'))) &&
+        (
+          (isTeacher() && incoming().status in ['draft', 'pending', 'approved', 'revision_required', 'rejected', 'hidden']) ||
+          (isSignedIn() && incoming().status in ['draft', 'pending'])
+        );
+
+      allow update: if isValidId(storyId) &&
+        !incoming().keys().hasAny(['fullName', 'pin', 'pinHash', 'plainPin', 'email', 'studentCode', 'phone']) &&
+        (!('artworkVideoUrl' in incoming()) || !(incoming().artworkVideoUrl is string && incoming().artworkVideoUrl.matches('^data:video/.*'))) &&
+        (
+          isTeacher() ||
+          (isSignedIn() &&
+           (existing().authorAccountId == request.auth.uid || existing().ownerKey == request.auth.uid) &&
+           incoming().status in ['draft', 'pending'])
+        );
+
+      allow delete: if isAdmin() || isTeacher();
     }
 
     // 3. Community Classes
@@ -144,7 +289,7 @@ service cloud.firestore {
       allow create, update, delete: if isTeacher();
     }
 
-    // 4. Community Lessons (Tham khảo bài học Khối 6, 7, 8, 9 + Video & Slide)
+    // 4. Community Lessons (Tham khảo bài học Lớp 1 -> Lớp 9 + Video & Slide bền vững)
     match /communityLessons/{lessonId} {
       allow get, list: if true;
       allow create, update: if isValidId(lessonId) &&
@@ -176,6 +321,59 @@ service cloud.firestore {
     // 8. Anonymous Portfolios
     match /anonymousPortfolios/{portfolioId} {
       allow read, write: if true;
+    }
+
+    // 9. Live Exhibition Presentation Sessions (Multi-device Projector/TV Sync)
+    match /livePresentations/{sessionCode} {
+      allow get, list: if true;
+      allow create: if isValidId(sessionCode) &&
+        isTeacher() &&
+        incoming().hostUid == request.auth.uid &&
+        incoming().status in ['active', 'ended'] &&
+        incoming().intervalSeconds in [5, 10, 15, 20, 30] &&
+        !incoming().keys().hasAny(['email', 'studentCode', 'pin', 'pinHash', 'firebaseToken', 'fullName']);
+      allow update: if isValidId(sessionCode) &&
+        (isAdmin() || (isTeacher() && existing().hostUid == request.auth.uid && incoming().hostUid == existing().hostUid)) &&
+        incoming().status in ['active', 'ended'] &&
+        incoming().intervalSeconds in [5, 10, 15, 20, 30] &&
+        !incoming().keys().hasAny(['email', 'studentCode', 'pin', 'pinHash', 'firebaseToken', 'fullName']);
+      allow delete: if isAdmin() || (isTeacher() && existing().hostUid == request.auth.uid);
+    }
+
+    // 10. Artwork Comments (ARTVERSE COMMUNITY — Final Moderation Policy & Child Safety)
+    // - Public/Students can only read 'published' (or 'approved') comments, or their own pending/rejected comments
+    // - Clients cannot directly force 'published' status from student accounts or spoof teacher/admin roles
+    // - Students can only edit/soft-delete their own comments (IDOR guard)
+    match /artworkComments/{commentId} {
+      allow get, list: if resource.data.status in ['published', 'approved'] ||
+        (isSignedIn() && resource.data.authorUid == request.auth.uid) ||
+        isTeacher();
+
+      allow create: if isValidId(commentId) &&
+        isSignedIn() &&
+        incoming().authorUid == request.auth.uid &&
+        !incoming().keys().hasAny(['fullName', 'email', 'studentCode', 'phone', 'pin', 'pinHash']) &&
+        incoming().content is string &&
+        incoming().content.size() > 0 &&
+        incoming().content.size() <= 400 &&
+        (
+          (isAdmin() && incoming().authorRole == 'admin' && incoming().status in ['published', 'pending']) ||
+          (isTeacher() && incoming().authorRole == 'teacher' && incoming().status in ['published', 'pending']) ||
+          (isStudent() && incoming().authorRole == 'student' && incoming().status == 'pending')
+        );
+
+      allow update: if isValidId(commentId) &&
+        isSignedIn() &&
+        !incoming().keys().hasAny(['fullName', 'email', 'studentCode', 'phone', 'pin', 'pinHash']) && (
+          isAdmin() ||
+          (isTeacher() && (!('classId' in existing()) || matchesStudentClassScope(existing().classId))) ||
+          (existing().authorUid == request.auth.uid &&
+           incoming().authorUid == existing().authorUid &&
+           incoming().authorRole == existing().authorRole &&
+           incoming().status in ['pending', 'deleted'])
+        );
+
+      allow delete: if isAdmin();
     }
   }
 }

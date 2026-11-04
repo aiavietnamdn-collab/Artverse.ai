@@ -2,64 +2,112 @@
 
 @layer base {
   :root {
-    --art-bg-paper: #FAF8F5;
-    --art-bg-warm: #F3EFEA;
-    --art-charcoal: #121316;
-    --art-cobalt: #1D4ED8;
-    --art-gold: #D97706;
-    --art-orange: #EA580C;
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
-    --safe-left: env(safe-area-inset-left, 0px);
-    --safe-right: env(safe-area-inset-right, 0px);
+    /* CONTEMPORARY CREATIVE GALLERY — Curated Brand Palette */
+    --gallery-cobalt: #3457D5;
+    --gallery-vermilion: #F15B3D;
+    --gallery-yellow: #F2D64B;
+    --gallery-magenta: #D94D91;
+    --gallery-violet: #6945B5;
+    --gallery-teal: #269C91;
+    --gallery-ivory: #F7F3EA;
+    --gallery-navy: #20243A;
+
+    /* Mapped variables for seamless compatibility across modules */
+    --art-cobalt: #3457D5;
+    --art-purple: #6945B5;
+    --art-tangerine: #F15B3D;
+    --art-yellow: #F2D64B;
+    --art-coral: #D94D91;
+    --art-teal: #269C91;
+    --art-cream: #F7F3EA;
+    --art-navy: #20243A;
+
+    --wonder-surface: #FFFFFF;
+    --wonder-surface-warm: #F7F3EA;
+    --wonder-ink: #20243A;
+    --wonder-ink-secondary: #3A3F58;
+    --wonder-ink-muted: #686D85;
+    --wonder-border: rgba(32, 36, 58, 0.12);
+
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    color-scheme: light;
   }
 
-  html, body {
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
-    background-color: #FAF8F5;
-    color: #121316;
-    overflow-x: hidden;
-    max-width: 100vw;
+  html {
+    font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
-    touch-action: manipulation;
+    scroll-behavior: smooth;
+    background-color: var(--gallery-ivory);
+    color: var(--gallery-navy);
   }
 
-  /* Editorial Serif Utility */
-  .font-editorial {
-    font-family: 'Playfair Display', Georgia, Cambria, 'Times New Roman', Times, serif;
+  body {
+    overscroll-behavior-y: none;
+    background-color: var(--gallery-ivory);
+    color: var(--gallery-navy);
+    /* Clean, uninterrupted Warm Ivory gallery canvas — zero distracting radial blobs */
+    background-image: none;
   }
 
-  /* Prevent iOS Safari auto-zoom on input focus by ensuring >= 16px on mobile screens */
+  /* Prevent iOS Safari auto-zoom on form focus */
   @media screen and (max-width: 768px) {
-    input, select, textarea {
+    input,
+    select,
+    textarea {
       font-size: 16px !important;
     }
   }
 }
 
-/* iOS Safe Area Utilities for Dynamic Island & Home Indicator */
+/* Typography Hierarchy: Be Vietnam Pro (Swiss/Contemporary Sans) + Playfair Display (Curatorial Serif) */
+.font-display {
+  font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.font-editorial {
+  font-family: 'Playfair Display', 'Be Vietnam Pro', Georgia, serif;
+  letter-spacing: -0.01em;
+}
+
+.font-editorial-display {
+  font-family: 'Playfair Display', 'Be Vietnam Pro', Georgia, serif;
+  letter-spacing: -0.015em;
+  line-height: 1.06;
+}
+
+.font-mono-code {
+  font-family: 'Be Vietnam Pro', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Safe-area utility classes for mobile viewports */
 .pt-safe {
-  padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+  padding-top: max(0.35rem, env(safe-area-inset-top, 0px));
 }
 
 .pb-safe {
-  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
 }
 
 .pb-safe-nav {
-  padding-bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 .pl-safe {
-  padding-left: env(safe-area-inset-left, 0px);
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
 }
 
 .pr-safe {
-  padding-right: env(safe-area-inset-right, 0px);
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
 }
 
-/* Hide scrollbars cleanly on horizontal filter rails */
+/* Hide scrollbars on horizontal filter rails while preserving scroll */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -68,19 +116,139 @@
   scrollbar-width: none;
 }
 
-/* Print styling for lesson plans and progress reports */
+/* ============================================================================
+   CONTEMPORARY CREATIVE GALLERY — ARCHITECTURAL SURFACES & CONTROLS
+   ============================================================================ */
+
+/* Architectural Grid Surface for Curatorial Collage */
+.gallery-swiss-grid {
+  background-color: #F7F3EA;
+  background-image:
+    linear-gradient(to right, rgba(32, 36, 58, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(32, 36, 58, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Primary Contemporary Button (Electric Cobalt / Ink Navy — No heavy shadows or pill bloat) */
+.art-btn-primary {
+  background-color: #20243A;
+  color: #F7F3EA;
+  border: 1px solid #20243A;
+  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+.art-btn-primary:hover {
+  background-color: #3457D5;
+  border-color: #3457D5;
+}
+.art-btn-primary:active {
+  transform: translateY(1px);
+}
+
+/* Secondary Architectural Outline Button */
+.art-btn-secondary,
+.wonder-btn-outline {
+  background-color: transparent;
+  color: #20243A;
+  border: 1.5px solid #20243A;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+.art-btn-secondary:hover,
+.wonder-btn-outline:hover {
+  background-color: #20243A;
+  color: #F7F3EA;
+}
+
+/* Acid Yellow Curatorial Button */
+.wonder-btn-yellow {
+  background-color: #F2D64B;
+  color: #20243A;
+  border: 1px solid #20243A;
+  transition: background-color 0.16s ease;
+}
+.wonder-btn-yellow:hover {
+  background-color: #E8CA3A;
+}
+
+/* Subtle Image Hover Scale */
+.museum-img-zoom {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.group:hover .museum-img-zoom {
+  transform: scale(1.02);
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Harmonize secondary panels with Warm Ivory (#F7F3EA) & Ink Navy (#20243A) */
+.wonderland-workspace .bg-\[\#0B0B0C\],
+.wonderland-workspace .bg-\[\#0B0B0C\]\/90,
+.wonderland-workspace .bg-\[\#0B0B0C\]\/85,
+.wonderland-workspace .bg-\[\#0B0B0C\]\/80,
+.wonderland-workspace .bg-\[\#111110\],
+.wonderland-workspace .bg-\[\#111110\]\/60,
+.wonderland-workspace .bg-\[\#181817\] {
+  background-color: #F7F3EA !important;
+  color: #20243A !important;
+}
+
+.wonderland-workspace .bg-\[\#131314\],
+.wonderland-workspace .bg-\[\#131314\]\/90,
+.wonderland-workspace .bg-\[\#131314\]\/60,
+.wonderland-workspace .bg-\[\#1B1A18\],
+.wonderland-workspace .bg-\[\#1C1B1A\],
+.wonderland-workspace .bg-\[\#1C1C1E\],
+.wonderland-workspace .bg-\[\#242320\],
+.wonderland-workspace .bg-\[\#262523\] {
+  background-color: #FFFFFF !important;
+  color: #20243A !important;
+}
+
+.wonderland-workspace .text-\[\#F4F0EA\],
+.wonderland-workspace .text-\[\#F4F0EA\]\/90,
+.wonderland-workspace .text-\[\#F4F0EA\]\/85,
+.wonderland-workspace .text-\[\#F2EFE7\] {
+  color: #20243A !important;
+}
+
+@keyframes museumFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.museum-fade-in {
+  animation: museumFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Print-Specific Styles */
 @media print {
-  aside, header, nav, .no-print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print {
     display: none !important;
   }
-  main {
-    padding: 0 !important;
-    margin: 0 !important;
-    width: 100% !important;
+  .print-only {
+    display: block !important;
   }
-  .printable-area {
-    box-shadow: none !important;
-    border: none !important;
-    width: 100% !important;
+  .print-page-break {
+    page-break-after: always;
+    break-after: page;
   }
 }

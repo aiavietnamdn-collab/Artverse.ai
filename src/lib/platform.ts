@@ -8,8 +8,8 @@
 import { Capacitor } from '@capacitor/core';
 import { ScreenTab } from '../types/artverse';
 
-export const APP_VERSION = '2.4.0';
-export const APP_BUILD_ID = '2026.11.01-r2';
+export const APP_VERSION = '3.0.0';
+export const APP_BUILD_ID = '2026.11.02-museum-editorial-r1';
 
 /**
  * Clears outdated browser Cache Storage and forces Service Worker update when a new build is deployed.
@@ -116,33 +116,59 @@ export function getApiUrl(endpointPath: string): string {
 const PATH_TO_TAB: Record<string, ScreenTab> = {
   '/': 'discover',
   '/discover': 'discover',
+  '/trang-chu': 'discover',
   '/kham-pha': 'discover',
   '/gallery': 'community-library',
   '/trien-lam': 'community-library',
   '/community-library': 'community-library',
+  '/shorts': 'artverse-shorts',
+  '/artverse-shorts': 'artverse-shorts',
+  '/stories': 'art-stories',
+  '/cau-chuyen': 'art-stories',
+  '/art-stories': 'art-stories',
+  '/gdpt': 'class-lessons',
+  '/mi-thuat-gdpt': 'class-lessons',
   '/classes': 'class-lessons',
   '/lop-hoc': 'class-lessons',
   '/class-lessons': 'class-lessons',
+  '/upload': 'upload-hub',
+  '/dang-tai': 'upload-hub',
+  '/upload-hub': 'upload-hub',
+  '/profile': 'profile-manage',
+  '/ho-so': 'profile-manage',
+  '/ca-nhan': 'profile-manage',
+  '/profile-manage': 'profile-manage',
+  '/management': 'management-tools',
+  '/cong-cu-quan-ly': 'management-tools',
+  '/management-tools': 'management-tools',
+  '/admin': 'system-admin',
+  '/quan-tri-he-thong': 'system-admin',
+  '/system-admin': 'system-admin',
   '/ai-chat': 'ai-chatbox',
   '/ai-chatbox': 'ai-chatbox',
   '/moderation': 'moderation',
   '/kiem-duyet': 'moderation',
   '/safety-audit': 'safety-audit',
   '/bao-mat': 'safety-audit',
-  '/profile': 'profile-manage',
-  '/ca-nhan': 'profile-manage',
-  '/profile-manage': 'profile-manage',
+  '/storage-center': 'storage-center',
+  '/luu-tru': 'storage-center',
 };
 
 const TAB_TO_PATH: Record<string, string> = {
   discover: '/',
   'community-library': '/gallery',
   library: '/gallery',
-  'class-lessons': '/classes',
+  'artverse-shorts': '/shorts',
+  'art-stories': '/stories',
+  'class-lessons': '/gdpt',
+  'upload-hub': '/upload',
+  'profile-manage': '/profile',
+  'management-tools': '/management',
+  'system-admin': '/admin',
   'ai-chatbox': '/ai-chat',
   moderation: '/moderation',
   'safety-audit': '/safety-audit',
-  'profile-manage': '/profile',
+  'storage-center': '/storage-center',
 };
 
 /**

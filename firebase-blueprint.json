@@ -2,26 +2,59 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "Art teacher user profile and permissions",
+      "description": "Art teacher or student user profile and permissions",
       "type": "object",
       "properties": {
         "uid": { "type": "string", "maxLength": 128 },
         "email": { "type": "string", "maxLength": 256 },
         "displayName": { "type": "string", "maxLength": 128 },
+        "nickname": { "type": "string", "maxLength": 64 },
+        "nicknameNormalized": { "type": "string", "maxLength": 64 },
+        "nicknameSetAt": { "type": "string", "maxLength": 64 },
+        "nicknameUpdatedAt": { "type": "string", "maxLength": 64 },
         "photoURL": { "type": "string", "maxLength": 1024 },
-        "role": { "type": "string", "enum": ["teacher", "admin"] },
+        "role": { "type": "string", "enum": ["viewer", "student", "teacher", "admin"] },
+        "classCode": { "type": "string", "maxLength": 32 },
+        "classGroupId": { "type": "string", "maxLength": 64 },
+        "studentCode": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["active", "locked"] },
         "createdAt": { "type": "string", "maxLength": 64 },
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
-      "required": ["uid", "email", "role"]
+      "required": ["uid", "role"]
+    },
+    "StudentAccount": {
+      "title": "StudentAccount",
+      "description": "Teacher-created pseudonymous student account with bcrypt PIN hash and creative nickname (no email, phone, DOB, or address)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "classCode": { "type": "string", "maxLength": 32 },
+        "classGroupId": { "type": "string", "maxLength": 64 },
+        "className": { "type": "string", "maxLength": 128 },
+        "studentCode": { "type": "string", "maxLength": 32 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "nickname": { "type": "string", "maxLength": 64 },
+        "nicknameNormalized": { "type": "string", "maxLength": 64 },
+        "nicknameSetAt": { "type": "string", "maxLength": 64 },
+        "nicknameUpdatedAt": { "type": "string", "maxLength": 64 },
+        "role": { "type": "string", "enum": ["student"] },
+        "status": { "type": "string", "enum": ["active", "locked"] },
+        "pinHash": { "type": "string", "maxLength": 256 },
+        "teacherId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "lastLoginAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "classCode", "studentCode", "displayName", "role", "status", "pinHash", "teacherId", "createdAt"]
     },
     "CommunityArtwork": {
       "title": "CommunityArtwork",
-      "description": "Student artwork exhibited without student names, emails or rosters",
+      "description": "Student artwork exhibited with creative nickname without student real names, emails or rosters",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
         "ownerKey": { "type": "string", "maxLength": 128 },
+        "authorAccountId": { "type": "string", "maxLength": 128 },
         "creatorAnonymousPseudonym": { "type": "string", "maxLength": 128 },
         "title": { "type": "string", "maxLength": 256 },
         "description": { "type": "string", "maxLength": 2048 },
@@ -42,6 +75,39 @@
       },
       "required": ["id", "ownerKey", "title", "classGroupId", "lessonId", "status", "shareStatus"]
     },
+    "ArtworkStory": {
+      "title": "ArtworkStory",
+      "description": "Student-written story, emotion, and message linked to a specific artwork in CÂU CHUYỆN TỪ BỨC TRANH",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "artworkId": { "type": "string", "maxLength": 128 },
+        "artworkTitle": { "type": "string", "maxLength": 256 },
+        "artworkImageUrl": { "type": "string", "maxLength": 4096 },
+        "artworkVisualType": { "type": "string", "maxLength": 64 },
+        "authorAccountId": { "type": "string", "maxLength": 128 },
+        "ownerKey": { "type": "string", "maxLength": 128 },
+        "authorNickname": { "type": "string", "maxLength": 64 },
+        "classCode": { "type": "string", "maxLength": 32 },
+        "classGroupId": { "type": "string", "maxLength": 64 },
+        "gradeLabel": { "type": "string", "maxLength": 32 },
+        "lessonId": { "type": "string", "maxLength": 64 },
+        "lessonTitle": { "type": "string", "maxLength": 256 },
+        "topic": { "type": "string", "maxLength": 256 },
+        "storyTitle": { "type": "string", "maxLength": 256 },
+        "storyContent": { "type": "string", "maxLength": 4096 },
+        "viewerMessage": { "type": "string", "maxLength": 1024 },
+        "status": { "type": "string", "enum": ["draft", "pending", "approved", "hidden"] },
+        "teacherId": { "type": "string", "maxLength": 128 },
+        "teacherNote": { "type": "string", "maxLength": 1024 },
+        "moderatedBy": { "type": "string", "maxLength": 128 },
+        "moderatedAt": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "publishedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "artworkId", "artworkTitle", "authorNickname", "gradeLabel", "storyTitle", "storyContent", "status", "createdAt", "updatedAt"]
+    },
     "CommunityClass": {
       "title": "CommunityClass",
       "description": "School class exhibition room",
@@ -58,13 +124,13 @@
     },
     "CommunityLesson": {
       "title": "CommunityLesson",
-      "description": "Art lesson reference for grades 6, 7, 8, 9 with video and slide slots",
+      "description": "Art lesson reference for grades 1 through 9 with video and slide slots",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 64 },
         "classGroupId": { "type": "string", "maxLength": 64 },
         "className": { "type": "string", "maxLength": 64 },
-        "grade": { "type": "string", "enum": ["6", "7", "8", "9"] },
+        "grade": { "type": "string", "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9"] },
         "title": { "type": "string", "maxLength": 256 },
         "topic": { "type": "string", "maxLength": 256 },
         "description": { "type": "string", "maxLength": 2048 },
@@ -101,11 +167,11 @@
     },
     "ContentReport": {
       "title": "ContentReport",
-      "description": "Community user report for inappropriate photo or comment",
+      "description": "Community user report for inappropriate photo, story, or comment",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
-        "targetType": { "type": "string", "enum": ["artwork", "comment"] },
+        "targetType": { "type": "string", "enum": ["artwork", "comment", "story"] },
         "targetId": { "type": "string", "maxLength": 128 },
         "targetTitle": { "type": "string", "maxLength": 256 },
         "reasonCategory": { "type": "string", "maxLength": 64 },
@@ -194,16 +260,75 @@
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "sessionId", "teacherId", "portfolioSecretKey", "anonymousCode", "lessonTitle", "status"]
+    },
+    "LivePresentationSession": {
+      "title": "LivePresentationSession",
+      "description": "Real-time multi-device exhibition presentation session controlled exclusively by the host teacher or admin",
+      "type": "object",
+      "properties": {
+        "sessionCode": { "type": "string", "maxLength": 32 },
+        "title": { "type": "string", "maxLength": 256 },
+        "hostUid": { "type": "string", "maxLength": 128 },
+        "hostDisplayName": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "ended"] },
+        "mode": { "type": "string", "enum": ["auto", "manual", "collection"] },
+        "currentIndex": { "type": "number" },
+        "isPlaying": { "type": "boolean" },
+        "intervalSeconds": { "type": "number" },
+        "showArtworkInfo": { "type": "boolean" },
+        "showAuthorInfo": { "type": "boolean" },
+        "showArtworkStory": { "type": "boolean" },
+        "pureArtworkOnly": { "type": "boolean" },
+        "backdropTheme": { "type": "string", "enum": ["obsidian", "museum_stone"] },
+        "filterGrade": { "type": "string", "maxLength": 64 },
+        "filterLessonId": { "type": "string", "maxLength": 64 },
+        "selectedArtworkIds": { "type": "string", "maxLength": 8192 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["sessionCode", "hostUid", "status", "currentIndex", "isPlaying", "intervalSeconds", "updatedAt"]
+    },
+    "ArtworkComment": {
+      "title": "ArtworkComment",
+      "description": "Child-safe moderated community comment under an artwork with creative nickname and zero PII",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "artworkId": { "type": "string", "maxLength": 128 },
+        "artworkTitle": { "type": "string", "maxLength": 256 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "classCode": { "type": "string", "maxLength": 32 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorNickname": { "type": "string", "maxLength": 64 },
+        "authorRole": { "type": "string", "enum": ["student", "teacher", "admin"] },
+        "content": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "isEdited": { "type": "boolean" },
+        "replyToId": { "type": "string", "maxLength": 128 },
+        "replyToNickname": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["published", "pending", "hidden", "rejected", "deleted"] },
+        "moderationSeverity": { "type": "string", "enum": ["SAFE", "REVIEW", "BLOCKED", "CRITICAL"] }
+      },
+      "required": ["id", "artworkId", "authorUid", "authorNickname", "authorRole", "content", "status", "createdAt"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "Teacher profile and security role metadata"
+      "description": "Teacher and student profile and security role metadata"
     },
     "/communityArtworks/{artworkId}": {
       "schema": "CommunityArtwork",
       "description": "Community artworks exhibited in public gallery"
+    },
+    "/artworkStories/{storyId}": {
+      "schema": "ArtworkStory",
+      "description": "Student stories linked to artworks in CÂU CHUYỆN TỪ BỨC TRANH"
+    },
+    "/artworkComments/{commentId}": {
+      "schema": "ArtworkComment",
+      "description": "Child-safe moderated community comments under artworks"
     },
     "/communityClasses/{classId}": {
       "schema": "CommunityClass",
@@ -236,6 +361,14 @@
     "/anonymousPortfolios/{portfolioId}": {
       "schema": "AnonymousPortfolio",
       "description": "Unguessable anonymous student portfolios without roster data"
+    },
+    "/studentAccounts/{studentId}": {
+      "schema": "StudentAccount",
+      "description": "Teacher-managed student accounts with hashed PINs and creative nicknames"
+    },
+    "/livePresentations/{sessionCode}": {
+      "schema": "LivePresentationSession",
+      "description": "Real-time live exhibition presentation sessions for classroom projectors and TVs"
     }
   }
 }

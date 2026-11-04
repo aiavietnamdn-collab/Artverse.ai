@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserRole } from '../../types/communityArt';
-import { Shield, Eye, Palette, GraduationCap, ShieldAlert, Check, Lock } from 'lucide-react';
+import { Shield, Eye, Palette, GraduationCap, ShieldAlert, Check, Lock, KeyRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface RbacRoleBarProps {
@@ -10,80 +10,86 @@ interface RbacRoleBarProps {
 }
 
 export const RbacRoleBar: React.FC<RbacRoleBarProps> = ({ currentRole, onSelectRole, onShowAuthModal }) => {
-  const { user, profile, isTeacher, isAdmin, verifiedRole } = useAuth();
+  const { user, profile, isTeacher, isAdmin, isStudent, verifiedRole, setIsStudentLoginModalOpen } = useAuth();
 
   const roles: { 
     key: UserRole; 
     label: string; 
     desc: string; 
     icon: React.ReactNode; 
-    color: string;
     requiresAuth: boolean;
-    requiredVerifiedRole?: 'teacher' | 'admin';
+    requiredVerifiedRole?: 'student' | 'teacher' | 'admin';
   }[] = [
     {
       key: 'viewer',
-      label: 'Khách xem',
-      desc: 'Chỉ xem tác phẩm đã duyệt và chia sẻ, gửi phản hồi tích cực (Không cần đăng nhập)',
+      label: 'Khách thưởng lãm',
+      desc: 'Thưởng lãm tác phẩm công khai và gửi phản hồi khích lệ (Không cần đăng nhập)',
       icon: <Eye className="w-3.5 h-3.5" />,
-      color: 'border-slate-300 text-slate-700 bg-slate-50',
       requiresAuth: false
+    },
+    {
+      key: 'student',
+      label: 'Nghệ sĩ Học sinh (PIN)',
+      desc: 'Đăng nhập bằng Mã lớp + Mã học sinh + Mã PIN; đăng tranh, viết câu chuyện & hỏi Trợ lý Gemini',
+      icon: <KeyRound className="w-3.5 h-3.5" />,
+      requiresAuth: true,
+      requiredVerifiedRole: 'student'
     },
     {
       key: 'contributor',
       label: 'Đóng góp ẩn danh',
-      desc: 'Gửi tác phẩm ẩn danh (bản nháp/chờ duyệt, lưu với token ngẫu nhiên)',
+      desc: 'Gửi tác phẩm với biệt danh nghệ thuật ẩn danh',
       icon: <Palette className="w-3.5 h-3.5" />,
-      color: 'border-emerald-300 text-emerald-800 bg-emerald-50',
       requiresAuth: false
     },
     {
       key: 'teacher',
-      label: 'Giáo viên',
-      desc: 'Chụp xuất bản tức thì, quản lý lớp/bài học và duyệt tác phẩm (Cần tài khoản Giáo viên)',
+      label: 'Giáo viên Mĩ thuật',
+      desc: 'Quản lý lớp, cấp thẻ PIN học sinh, xuất bản tức thì và duyệt câu chuyện',
       icon: <GraduationCap className="w-3.5 h-3.5" />,
-      color: 'border-blue-300 text-blue-800 bg-blue-50',
       requiresAuth: true,
       requiredVerifiedRole: 'teacher'
     },
     {
       key: 'moderator',
-      label: 'Kiểm duyệt viên',
-      desc: 'Xử lý hàng chờ duyệt và giải quyết báo cáo vi phạm nội dung',
+      label: 'Giám tuyển / Kiểm duyệt',
+      desc: 'Duyệt hàng chờ tác phẩm và xử lý báo cáo nội dung',
       icon: <ShieldAlert className="w-3.5 h-3.5" />,
-      color: 'border-purple-300 text-purple-800 bg-purple-50',
       requiresAuth: true,
       requiredVerifiedRole: 'teacher'
     },
     {
       key: 'admin',
-      label: 'Quản trị viên',
-      desc: 'Toàn quyền cấu hình bảo mật, lớp học và quản lý phân quyền Firestore',
+      label: 'Quản trị Bảo tàng',
+      desc: 'Phân quyền giáo viên, chỉnh sửa ảnh triển lãm & quản trị toàn hệ thống',
       icon: <Shield className="w-3.5 h-3.5" />,
-      color: 'border-amber-300 text-amber-800 bg-amber-50',
       requiresAuth: true,
       requiredVerifiedRole: 'admin'
     },
   ];
 
   const handleRoleClick = (roleDef: typeof roles[number]) => {
-    // SECURITY ENFORCEMENT: Disallow unauthenticated guests from self-escalating to teacher or admin
+    if (roleDef.requiredVerifiedRole === 'student') {
+      if (isStudent) {
+        onSelectRole('student');
+      } else {
+        setIsStudentLoginModalOpen(true);
+      }
+      return;
+    }
+
     if (roleDef.requiresAuth && !user) {
       if (onShowAuthModal) {
         onShowAuthModal();
-      } else {
-        alert('Vui lòng đăng nhập bằng tài khoản Google để kích hoạt vai trò Giáo viên / Quản trị viên.');
       }
       return;
     }
 
     if (roleDef.requiredVerifiedRole === 'admin' && !isAdmin) {
-      alert('Tài khoản của bạn chưa được cấp quyền Quản trị viên trên máy chủ.');
       return;
     }
 
     if (roleDef.requiredVerifiedRole === 'teacher' && !isTeacher) {
-      alert('Tài khoản của bạn chưa có quyền Giáo viên trên cơ sở dữ liệu Firestore.');
       return;
     }
 
@@ -93,55 +99,57 @@ export const RbacRoleBar: React.FC<RbacRoleBarProps> = ({ currentRole, onSelectR
   const activeRoleMeta = roles.find(r => r.key === currentRole) || roles[0];
 
   return (
-    <div className="hidden lg:block bg-white/95 backdrop-blur-sm border-b border-stone-200/80 px-4 py-2 text-xs no-print shadow-2xs">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px] flex items-center gap-1">
-            <Shield className="w-3 h-3 text-slate-400" />
-            Phân quyền Máy chủ (Zero-Trust):
+    <div className="hidden lg:block bg-[#181817] px-6 pt-2.5 pb-1 text-[11px] no-print">
+      <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-4 px-2">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className="text-[#9A968E] uppercase tracking-[0.22em] text-[9px] font-semibold">
+            MUSEUM ACCESS PASS:
           </span>
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
+          <div className="flex items-center gap-1">
             {roles.map((r) => {
               const isActive = currentRole === r.key;
-              const isLocked = r.requiresAuth && (!user || (r.requiredVerifiedRole === 'admin' && !isAdmin));
+              const isLocked =
+                r.requiresAuth &&
+                ((r.requiredVerifiedRole === 'student' && !isStudent) ||
+                  (r.requiredVerifiedRole === 'teacher' && !isTeacher) ||
+                  (r.requiredVerifiedRole === 'admin' && !isAdmin));
 
               return (
                 <button
                   key={r.key}
+                  type="button"
                   onClick={() => handleRoleClick(r)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium transition-colors border cursor-pointer whitespace-nowrap ${
                     isActive
-                      ? `${r.color} shadow-xs font-bold scale-[1.02]`
+                      ? 'bg-[#0B0B0C] text-[#F3C1C6] border-[#F3C1C6]/50 font-bold'
                       : isLocked
-                      ? 'border-dashed border-slate-200 text-slate-400 bg-slate-50/50 hover:bg-slate-100 cursor-not-allowed'
-                      : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        ? 'border-transparent text-[#9A968E]/55 hover:text-[#F4F0EA]'
+                        : 'border-transparent text-[#9A968E] hover:text-[#F4F0EA]'
                   }`}
-                  title={isLocked ? `Cần đăng nhập tài khoản có thẩm quyền để kích hoạt ${r.label}` : r.desc}
+                  title={isLocked ? `Nhấn để đăng nhập kích hoạt ${r.label}` : r.desc}
                 >
-                  {isLocked ? <Lock className="w-3 h-3 text-slate-400" /> : r.icon}
+                  {isLocked ? <Lock className="w-2.5 h-2.5 text-[#9A968E]/50" /> : r.icon}
                   <span>{r.label}</span>
-                  {isActive && <Check className="w-3 h-3 text-current ml-0.5" />}
+                  {isActive && <Check className="w-2.5 h-2.5 text-[#F3C1C6]" />}
                 </button>
               );
             })}
           </div>
         </div>
 
-        <div className="text-[11px] text-slate-500 flex items-center gap-2">
-          {user ? (
-            <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Đã xác thực: <strong>{profile?.displayName || user.email}</strong> ({verifiedRole})
+        <div className="text-[10px] text-[#9A968E] flex items-center gap-2 shrink-0">
+          {profile ? (
+            <span>
+              Đã xác thực: <strong className="text-[#F4F0EA]">{profile.nickname || profile.displayName}</strong> · <span className="text-[#F3C1C6] uppercase tracking-wider text-[9px]">{verifiedRole}</span>
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-              Khách vãng lai (Quyền xem công khai)
-            </span>
+            <span className="uppercase tracking-[0.18em] text-[9px]">PUBLIC EXHIBITION VISITOR</span>
           )}
-          <span className="hidden xl:inline text-slate-400">·</span>
-          <span className="italic truncate hidden xl:inline">{activeRoleMeta.desc}</span>
+          <span className="hidden xl:inline text-[#F4F0EA]/20">·</span>
+          <span className="font-editorial italic truncate max-w-xs hidden xl:inline text-[#9A968E]">{activeRoleMeta.desc}</span>
         </div>
       </div>
     </div>
   );
 };
+

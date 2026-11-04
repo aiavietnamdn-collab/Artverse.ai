@@ -1,0 +1,33 @@
+# Dependencies & build outputs
+node_modules
+dist
+build
+server.js
+coverage
+
+# Environment & secret files (never include in Docker image)
+.env
+.env.*
+!.env.example
+.dev.env.json
+.artverse-secure-store.json
+.artverse-server-data.json
+*service-account*.json
+*credentials*.json
+*.pem
+*.key
+
+# Git & IDE metadata
+.git
+.gitignore
+.github
+.vscode
+.idea
+.aistudio
+.DS_Store
+*.log
+npm-debug.log*
+
+# Native mobile build directories
+ios
+android

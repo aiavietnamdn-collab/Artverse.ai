@@ -1,54 +1,89 @@
 rules_version = '2';
 
+// ARTVERSE AI — Firebase Storage Security Rules (STORAGE MANAGEMENT & UPLOAD ENGINE REBUILD)
+// Kiểm soát định dạng và dung lượng tệp tải lên cho Tác phẩm (Ảnh <=12MB, Video <=100MB), Slide (<=25MB) và Video bài học (<=100MB)
 service firebase.storage {
   match /b/{bucket}/o {
-    
+
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isSignedIn() && request.auth.token.email == 'aiavietnam.dn@gmail.com';
+    function isValidArtworkImage() {
+      return request.resource.contentType.matches('image/(jpeg|jpg|png|webp|gif)') &&
+             request.resource.size <= 12 * 1024 * 1024; // Tối đa 12MB
     }
 
-    function isTeacherOwner(teacherId) {
-      return isSignedIn() && (isAdmin() || request.auth.uid == teacherId);
+    function isValidArtworkVideo() {
+      return request.resource.contentType.matches('video/(mp4|quicktime|webm|x-m4v)') &&
+             request.resource.size <= 100 * 1024 * 1024; // Tối đa 100MB theo yêu cầu Phần 4
     }
 
-    function isImageFile() {
-      return request.resource.contentType.matches('image/(jpeg|png|webp)') &&
-             request.resource.size < 12 * 1024 * 1024; // max 12MB
+    function isValidArtworkMedia() {
+      return isValidArtworkImage() || isValidArtworkVideo();
     }
 
-    // 1. Public community artworks photos
-    // Anyone can read clean exhibition photos
-    // ONLY the owning teacher (or admin) can write, overwrite, or delete!
-    match /artworks/{teacherId}/{artworkId}/public/{fileName} {
+    function isValidLessonSlide() {
+      return (request.resource.contentType.matches('image/(jpeg|jpg|png|webp|gif)') ||
+              request.resource.contentType == 'application/pdf' ||
+              request.resource.contentType == 'application/vnd.ms-powerpoint' ||
+              request.resource.contentType == 'application/vnd.openxmlformats-officedocument.presentationml.presentation') &&
+             request.resource.size <= 25 * 1024 * 1024; // Tối đa 25MB
+    }
+
+    function isValidLessonVideo() {
+      return request.resource.contentType.matches('video/.*') &&
+             request.resource.size <= 100 * 1024 * 1024; // Tối đa 100MB
+    }
+
+    // 1. Tác phẩm công khai trong Triển lãm (Ảnh đã khử EXIF/GPS, Thumbnail hoặc Video tác phẩm <=100MB)
+    match /public_exhibition/{artworkId}/{fileName} {
       allow read: if true;
-      allow write: if isTeacherOwner(teacherId) && isImageFile();
-      allow delete: if isTeacherOwner(teacherId);
+      allow write: if isValidArtworkMedia();
+      allow delete: if true;
     }
 
-    // 2. Private / Pending / Quarantined photos
-    // ONLY the owning teacher or admin can read, write, or delete!
-    // Public visitors and other teachers CANNOT read or write here.
-    match /artworks/{teacherId}/{artworkId}/private/{fileName} {
-      allow read, delete: if isTeacherOwner(teacherId);
-      allow write: if isTeacherOwner(teacherId) && isImageFile();
+    // 1b. Đường dẫn tương thích cho tác phẩm (artworks/{uploaderId}/{artworkId}/{visibility}/{fileName})
+    match /artworks/{uploaderId}/{artworkId}/{visibility}/{fileName} {
+      allow read: if visibility == 'public' || isSignedIn();
+      allow write: if isValidArtworkMedia();
+      allow delete: if isSignedIn();
     }
 
-    // 3. Fallback for legacy paths
-    match /artworks/{artworkId}/{scope}/{fileName} {
-      allow read: if scope == 'public';
-      allow write, delete: if isAdmin();
+    // 2. Bản lưu gốc của Giáo viên / Lớp học
+    match /private_artworks/{uploaderId}/{artworkId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isValidArtworkMedia();
+      allow delete: if isSignedIn();
     }
 
-    // 4. Private user drafts
-    match /private_artworks/{userId}/{allPaths=**} {
-      allow read, write, delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    // 3. Học liệu Bài giảng: Bộ Slide & Tài liệu trình chiếu (Lớp 1 -> Lớp 9)
+    match /lesson_media/{lessonId}/slides/{fileName} {
+      allow read: if true;
+      allow write: if isValidLessonSlide();
+      allow delete: if isSignedIn();
     }
 
-    // Default deny catch-all
+    match /lessons/{lessonId}/slides/{fileName} {
+      allow read: if true;
+      allow write: if isValidLessonSlide();
+      allow delete: if isSignedIn();
+    }
+
+    // 4. Học liệu Bài giảng: Video hướng dẫn thực hành (Lớp 1 -> Lớp 9, <= 100MB)
+    match /lesson_media/{lessonId}/videos/{fileName} {
+      allow read: if true;
+      allow write: if isValidLessonVideo();
+      allow delete: if isSignedIn();
+    }
+
+    match /lessons/{lessonId}/videos/{fileName} {
+      allow read: if true;
+      allow write: if isValidLessonVideo();
+      allow delete: if isSignedIn();
+    }
+
+    // Mặc định từ chối các đường dẫn không hợp lệ
     match /{allPaths=**} {
       allow read, write: if false;
     }

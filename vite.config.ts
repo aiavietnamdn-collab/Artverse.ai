@@ -25,9 +25,9 @@ export default defineConfig(() => {
           name: 'ARTVERSE AI',
           short_name: 'ARTVERSE AI',
           description:
-            'Không gian Triển lãm Nghệ thuật Số Học đường & Học liệu Mĩ thuật theo Chương trình GDPT 2018.',
-          theme_color: '#FAF8F5',
-          background_color: '#FAF8F5',
+            'Bảo tàng Nghệ thuật Số Đương đại & Không gian Sáng tạo Mĩ thuật Học sinh (Lớp 1 – Lớp 9).',
+          theme_color: '#111110',
+          background_color: '#111110',
           display: 'standalone',
           orientation: 'portrait-primary',
           start_url: '/',
@@ -71,7 +71,7 @@ export default defineConfig(() => {
           runtimeCaching: [
             // NEVER cache authentication, student data, Firestore documents, private Storage files, or backend API responses
             {
-              urlPattern: /^https:\/\/(identitytoolkit|securetoken|firestore|firebasestorage)\.googleapis\.com\/.*/i,
+              urlPattern: /^https:\/\/((identitytoolkit|securetoken|firestore|firebasestorage)\.googleapis\.com|.*\.firebasestorage\.app)\/.*/i,
               handler: 'NetworkOnly',
             },
             {
@@ -116,13 +116,14 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {
-      // HMR is disabled in AI Studio environment to prevent WebSocket connection errors in middleware mode.
+      // HMR is disabled in AI Studio environment to prevent WebSocket connection errors in middleware mode,
+      // while keeping chokidar file watching enabled so module graph invalidates immediately on edits.
       hmr: false,
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      watch: {},
     },
   };
 });

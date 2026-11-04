@@ -7,13 +7,19 @@
 
 import React, { useState, useMemo } from 'react';
 import { CommunityArtwork, ClassGroup, ArtLesson } from '../../types/communityArt';
+import { getArtworkNormalizedGrade, getStandardClassIdFromGrade, normalizeGrade } from '../../utils/gradeUtils';
 import { X, Save, Edit3, User, GraduationCap } from 'lucide-react';
 
 const STANDARD_CLASSES: Array<{ id: string; name: string }> = [
-  { id: 'cls-6', name: 'Khối 6' },
-  { id: 'cls-7', name: 'Khối 7' },
-  { id: 'cls-8', name: 'Khối 8' },
-  { id: 'cls-9', name: 'Khối 9' },
+  { id: 'cls-1', name: 'Lớp 1' },
+  { id: 'cls-2', name: 'Lớp 2' },
+  { id: 'cls-3', name: 'Lớp 3' },
+  { id: 'cls-4', name: 'Lớp 4' },
+  { id: 'cls-5', name: 'Lớp 5' },
+  { id: 'cls-6', name: 'Lớp 6' },
+  { id: 'cls-7', name: 'Lớp 7' },
+  { id: 'cls-8', name: 'Lớp 8' },
+  { id: 'cls-9', name: 'Lớp 9' },
 ];
 
 interface EditArtworkModalProps {
@@ -38,18 +44,20 @@ export const EditArtworkModal: React.FC<EditArtworkModalProps> = ({
       map.set(std.id, std);
     }
     for (const c of classes) {
-      if (c.id && c.name && !c.isHidden) {
-        map.set(c.id, { id: c.id, name: c.name });
+      if (c.id && c.name && !c.isHidden && !map.has(c.id)) {
+        map.set(c.id, { id: c.id, name: normalizeGrade(c.name) !== 'Chưa xác định' ? normalizeGrade(c.name) : c.name });
       }
     }
-    if (artwork.classGroupId && artwork.className && !map.has(artwork.classGroupId)) {
-      map.set(artwork.classGroupId, { id: artwork.classGroupId, name: artwork.className });
-    }
     return Array.from(map.values());
-  }, [classes, artwork.classGroupId, artwork.className]);
+  }, [classes]);
+
+  const initialStdClassId =
+    getStandardClassIdFromGrade(artwork.className || artwork.classGroupId) ||
+    artwork.classGroupId ||
+    'cls-6';
 
   const [title, setTitle] = useState(artwork.title);
-  const [classGroupId, setClassGroupId] = useState(artwork.classGroupId || 'cls-6');
+  const [classGroupId, setClassGroupId] = useState(initialStdClassId);
   const [author, setAuthor] = useState(
     artwork.creatorAnonymousPseudonym === 'Khuyết danh' ? '' : (artwork.creatorAnonymousPseudonym || '')
   );
@@ -67,7 +75,7 @@ export const EditArtworkModal: React.FC<EditArtworkModalProps> = ({
 
     const chosenClass = availableClasses.find(c => c.id === classGroupId) || {
       id: classGroupId,
-      name: artwork.className || 'Khối 6'
+      name: getArtworkNormalizedGrade(artwork) !== 'Chưa xác định' ? getArtworkNormalizedGrade(artwork) : 'Lớp 6'
     };
     const finalAuthor = author.trim() || 'Khuyết danh';
 

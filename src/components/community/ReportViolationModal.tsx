@@ -3,7 +3,7 @@ import { ContentReport } from '../../types/communityArt';
 import { AlertOctagon, X, ShieldAlert, Send } from 'lucide-react';
 
 interface ReportViolationModalProps {
-  targetType: 'artwork' | 'comment';
+  targetType: 'artwork' | 'comment' | 'story';
   targetId: string;
   targetTitle: string;
   onClose: () => void;
@@ -50,6 +50,17 @@ export const ReportViolationModal: React.FC<ReportViolationModalProps> = ({
       reporterAnonymousCode: `Ẩn danh #${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: new Date().toLocaleDateString('vi-VN')
     };
+
+    if (targetType === 'story') {
+      fetch(`/api/stories/${encodeURIComponent(targetId)}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason,
+          reasonDetails: reasonDetails.trim()
+        })
+      }).catch(() => {});
+    }
 
     onSubmitReport(report);
     onClose();
